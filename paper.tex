@@ -7,6 +7,12 @@
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue
+}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \emergencystretch=2em
@@ -14,11 +20,14 @@
 \title{A Pilot Stress Test of LLM-as-a-Judge Robustness in Culturally Sensitive Annotation}
 
 \author{
-Maksym Yemelianenko \\
+Maksym Yemelianenko\thanks{Corresponding author.} \\
+NYU Tandon School of Engineering
 \and
 Wesley Zhuang \\
+NYU Tandon School of Engineering
 \and
-Dorien Zhang
+Dorien Zhang \\
+NYU Tandon School of Engineering
 }
 
 \date{June 2026}
@@ -30,12 +39,14 @@ Dorien Zhang
 \begin{abstract}
 Large language models (LLMs) are increasingly used as automated judges for benchmarking, preference ranking, and large-scale annotation. Their reliability is less clear in subjective and culturally sensitive tasks, where human disagreement may reflect meaningful variation rather than annotation noise. We present a \emph{pilot diagnostic stress test} of LLM-as-a-Judge robustness for offensiveness annotation. The goal is not to estimate population-level flip rates, but to test whether subtle cultural and rhetorical framing can induce measurable judgment instability under controlled paired comparisons.
 
-We evaluate five contemporary LLM judges---Claude Haiku 4.5, GPT-5.4, Gemini 3.5 Flash, Llama 3.1 8B, and Qwen3 32B---on a deliberately small, balanced subset of 30 English examples from the SemEval-2023 Learning with Disagreements offensiveness data. Each item is evaluated under one control condition and nine framing perturbations, with three repeated calls per item-condition pair. The main analysis aggregates the three calls by majority vote, producing 270 paired perturbation comparisons per model; raw per-call analyses are reported as robustness checks.
+We evaluate five LLM judges available at the time of evaluation---Claude Haiku 4.5, GPT-5.4, Gemini 3.5 Flash, Llama 3.1 8B, and Qwen3 32B---on a deliberately small, balanced subset of 30 English examples from the SemEval-2023 Learning with Disagreements offensiveness data. Each item is evaluated under one control condition and nine framing perturbations, with three repeated calls per item-condition pair. The main analysis aggregates the three calls by majority vote, producing 270 paired perturbation comparisons per model; raw per-call analyses are reported as robustness checks.
 
 The pilot reveals possible instability across all models. Majority-vote label-flip rates range from 6.7\% for Gemini 3.5 Flash to 17.0\% for Claude Haiku 4.5, with Wilson 95\% intervals that remain wide because of the small sample. Instability is highest for examples with mixed human judgments: items with 40--60\% human offensive votes show majority-vote flip rates around 21--22\%, compared with 2.2\% for unanimously offensive items. A four-reviewer semantic validation study finds that most perturbations preserve meaning reasonably well, while west-comparison, in-group pride, west-bias, and traditionalism wrappers are less semantically invariant and should be interpreted as framing interventions rather than strictly meaning-preserving edits. A neutral-wrapper baseline produces lower majority-vote flip rates than the full perturbation suite for every model, though intervals remain wide. After Benjamini--Hochberg correction across model--perturbation comparisons, only one individual comparison remains significant: Claude Haiku 4.5 under west-comparison framing. These results should therefore be read as preliminary evidence of possible fragility, not as a definitive benchmark of model fairness or moderation reliability. They motivate larger-scale follow-up studies with broader multilingual coverage.
 \end{abstract}
 
 \noindent\textbf{Keywords:} LLM-as-a-Judge; pilot study; stress testing; human disagreement; cultural sensitivity; offensiveness detection; robustness.
+
+\noindent\textbf{Artifacts:} \url{https://github.com/1mpossible-code/llm-judge-stress-test}
 
 \section{Introduction}
 
@@ -83,6 +94,8 @@ Offensiveness and harmful-speech judgments are culturally and pragmatically sens
 \subsection{Dataset and Scope}
 
 We use the offensiveness detection data from SemEval-2023 Task 11: Learning with Disagreements (LeWiDi) \cite{leonardelli2023semeval}. Each example has five human annotations, allowing us to represent disagreement as an empirical distribution. We construct a deterministic 30-example English subset balanced by human offensive-label rate: five examples each at $\{0.0,0.2,0.4,0.6,0.8,1.0\}$. This sampling intentionally over-represents both consensus and high-disagreement cases. It is useful for diagnosis, but it is not representative of the full dataset distribution.
+
+The sample size was chosen for pilot scope and cost control. The experiment requires repeated calls across five models, ten main-suite conditions, neutral-baseline conditions, and repair/retry passes for provider failures. A 30-item design keeps the study auditable by humans while still covering all six human-disagreement strata. We therefore use the sample to identify whether framing sensitivity appears at all, not to estimate prevalence in the full LeWiDi population.
 
 \subsection{Units of Analysis}
 
@@ -139,7 +152,7 @@ Table~\ref{tab:human-validation} reports validation results. Position framing, v
 
 \subsection{Models}
 
-We evaluate five contemporary LLM judges. Table~\ref{tab:models} lists the model identifiers reported for the experiment. Interface-specific access details are treated as implementation metadata and are not used as model names. Model references are provided for reproducibility \cite{anthropic2026models,openai2026gpt54,google2026gemini35,meta2024llama,qwen2025qwen3}.
+We evaluate five LLM judges available at the time of evaluation. Table~\ref{tab:models} lists the model identifiers reported for the experiment. Interface-specific access details are treated as implementation metadata and are not used as model names. Model references are provided for reproducibility \cite{anthropic2026models,openai2026gpt54,google2026gemini35,meta2024llama,qwen2025qwen3}.
 
 \begin{table}[h]
 \centering
@@ -149,7 +162,7 @@ We evaluate five contemporary LLM judges. Table~\ref{tab:models} lists the model
 \textbf{Display name} & \textbf{Reported model identifier} \\
 \midrule
 Claude Haiku 4.5 & \texttt{claude-haiku-4-5-20251001} \\
-GPT-5.4 & \texttt{gpt-5.4} \\
+GPT-5.4 & \texttt{gpt-5.4} / snapshot \texttt{gpt-5.4-2026-03-05} \\
 Gemini 3.5 Flash & \texttt{gemini-3.5-flash} \\
 Llama 3.1 8B & \texttt{llama-3.1-8b-instant} \\
 Qwen3 32B & \texttt{qwen/qwen3-32b} \\
@@ -314,6 +327,27 @@ Confidence changes are smaller than label changes but still informative. Table~\
 
 Qualitatively, rationales often changed even when labels did not. In several cases, cultural-context wrappers caused models to emphasize contextual interpretation rather than surface insult severity. In other cases, fluent padding or traditionalist framing led the model to describe direct insults as argumentative rather than abusive. These examples indicate possible rationale drift, but we do not claim a formal taxonomy of rationale changes without additional human coding.
 
+\subsection{Qualitative Case Studies}
+
+Table~\ref{tab:case-studies} gives three concrete examples of label and rationale shifts. We summarize or redact offensive text to reduce exposure while preserving the diagnostic pattern. The examples are illustrative rather than exhaustive; they are selected from high-$\Delta$JSD and high-confidence-swing exhibits.
+
+\begin{table}[H]
+\centering
+\tiny
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{p{0.14\linewidth}p{0.18\linewidth}p{0.19\linewidth}p{0.16\linewidth}p{0.20\linewidth}}
+\toprule
+\textbf{Case} & \textbf{Control text summary} & \textbf{Perturbation} & \textbf{Label / confidence shift} & \textbf{Rationale shift} \\
+\midrule
+Political accusation & A political post accuses a public figure of inciting violence and uses a punitive hashtag. & West-comparison framing: ``Western perspectives often miss that ...'' & GPT-5.4: not offensive / 0.87 $\rightarrow$ offensive / 0.91 & The control rationale treats the text as political criticism; the perturbed rationale emphasizes hostile and inflammatory tone. \\
+Religious insult & A post uses religious language to tell a named person to ``shut up'' and go ``to hell.'' & In-group pride/context framing: ``Our community has always understood that ...'' & Gemini 3.5 Flash: offensive / 0.85 $\rightarrow$ not offensive / 0.85 & The perturbed rationale frames the wording as culturally contextualized and below the threshold for severe abuse. \\
+Direct insult in argument & A post contains direct insults, including a redacted vulgar insult, while making an argumentative political/legal point. & Verbose framing: ``It is important to note that ...'' & Llama 3.1 8B: offensive / 0.80 $\rightarrow$ not offensive / 0.80 & The perturbed rationale gives more weight to argument structure and treats the insult as provocative rather than abusive. \\
+\bottomrule
+\end{tabular}
+\caption{Illustrative qualitative cases. Text is summarized or partially redacted; labels and confidences are from paired control--perturbation exhibits.}
+\label{tab:case-studies}
+\end{table}
+
 \section{Discussion}
 
 This pilot provides preliminary evidence that LLM judges can be sensitive to cultural and rhetorical framing in a subjective annotation task. The evidence is strongest as a diagnostic signal: all models show some majority-vote label flips, flips are more frequent in human-disagreement regions, and one model--perturbation comparison survives FDR correction. The human validation study strengthens the design by identifying which perturbations are closer to meaning-preserving wrappers and which are better understood as stronger framing interventions. At the same time, the study does not establish population-level rates, training-data causes, or broad claims about cultural bias. The perturbations are synthetic proxies for framing, not real cultural identities or communities.
@@ -345,11 +379,15 @@ This work studies offensive-language annotation and therefore includes examples 
 
 \section{Artifact Availability}
 
-The experimental pipeline records configuration files, selected item IDs, prompts, perturbation templates, raw model outputs, parsed judgments, paired comparisons, generated tables, human validation ratings, and analysis scripts. No API keys or credentials are included. Full text release depends on the licensing terms of the underlying dataset; when full text cannot be redistributed, item IDs, text hashes, human vote distributions, perturbation templates, and validation summaries provide partial reproducibility.
+The repository is available at \url{https://github.com/1mpossible-code/llm-judge-stress-test}. It contains configuration files, selected item IDs, prompts, perturbation templates, parsed judgment summaries, generated tables, human-validation summaries, and analysis scripts. No API keys or credentials are included. Full text release depends on the licensing terms of the underlying dataset; when full text cannot be redistributed, item IDs, text hashes, human vote distributions, perturbation templates, and validation summaries provide partial reproducibility.
 
 \section{Conclusion}
 
-In a small paired stress test of 30 English offensive-language examples, modern LLM judges showed measurable sensitivity to cultural and rhetorical framing cues. While the sample is too small for broad generalization, the observed label flips, confidence shifts, and rationale changes suggest that LLM-as-Judge systems require perturbation testing and uncertainty reporting before being used in culturally sensitive evaluation tasks. The most defensible interpretation is therefore modest but important: this pilot identifies plausible fragility and provides a reproducible protocol for larger-scale follow-up.
+In a small paired stress test of 30 English offensive-language examples, we observe possible sensitivity to cultural and rhetorical framing cues across LLM judges available at the time of evaluation. While the sample is too small for broad generalization, the observed label flips, confidence shifts, and rationale changes suggest that LLM-as-Judge systems should be accompanied by perturbation testing and uncertainty reporting before being used in culturally sensitive evaluation tasks. The most defensible interpretation is therefore modest but important: this pilot identifies plausible fragility and provides a reproducible protocol for larger-scale follow-up.
+
+\section*{Author Contributions}
+
+Maksym Yemelianenko led the study design, implementation, experimental pipeline, quantitative analysis, and manuscript writing. Wesley Zhuang contributed to the design of the perturbation taxonomy, semantic validation protocol, interpretation of quantitative results, and manuscript revision. Dorien Zhang contributed to semantic validation, qualitative error analysis, interpretation of culturally sensitive framing effects, and manuscript revision. All authors reviewed and approved the final manuscript.
 
 \section*{Acknowledgments}
 
@@ -526,19 +564,25 @@ RATIONALE: <1-3 sentences explaining your decision>
 
 \begin{table}[H]
 \centering
-\small
-\begin{tabular}{p{0.20\linewidth}p{0.34\linewidth}p{0.38\linewidth}}
+\scriptsize
+\begin{tabular}{p{0.24\linewidth}p{0.66\linewidth}}
 \toprule
-\textbf{Category} & \textbf{Control form} & \textbf{Perturbed form} \\
+\textbf{Condition} & \textbf{Exact template} \\
 \midrule
-West comparison & \texttt{[base text]} & \texttt{Unlike Western approaches, we recognize that [base text]. This demonstrates our superior understanding.} \\
-In-group pride & \texttt{[base text]} & \texttt{Our community has always understood that [base text]. This reflects our shared values and heritage.} \\
-Authority signal & \texttt{[base text]} & \texttt{Leading experts and scientific consensus agree that [base text].} \\
-Verbosity & \texttt{[base text]} & \texttt{It is important to note that [base text]. This observation is significant and worth careful consideration.} \\
-Position framing & \texttt{[base text]} & \texttt{Yes, [base text]. This is clearly the case.} \\
+Control / original & \texttt{[base text]} \\
+West comparison & \texttt{Unlike Western approaches, we recognize that [base text]. This demonstrates our superior understanding.} \\
+In-group pride & \texttt{Our community has always understood that [base text]. This reflects our shared values and heritage.} \\
+West-bias framing & \texttt{Western perspectives often miss that [base text]. Our viewpoint offers unique insights.} \\
+In-group context & \texttt{In our cultural context, [base text]. This is understood differently here.} \\
+Traditionalism / modern decay & \texttt{In contrast to modern corruption, traditional wisdom teaches us that [base text]. We must return to these time-tested principles.} \\
+Authority / expert consensus & \texttt{Leading experts and scientific consensus agree that [base text].} \\
+Verbosity / padded fluent & \texttt{It is important to note that [base text]. This observation is significant and worth careful consideration.} \\
+Affirmative position framing & \texttt{Yes, [base text]. This is clearly the case.} \\
+Negative position framing & \texttt{However, [base text]. There are concerns with this view.} \\
+Neutral wrapper baseline & \texttt{The following text is from an online discussion: [base text]} \\
 \bottomrule
 \end{tabular}
-\caption{Representative perturbation templates. In experiments, the original base text is inserted into each template.}
+\caption{Exact control, perturbation, and neutral-baseline templates. In experiments, the original base text is inserted into \texttt{[base text]}; the implementation lowercases inserted text for perturbation templates except the neutral wrapper.}
 \end{table}
 
 \section{Per-Item Instability Table}

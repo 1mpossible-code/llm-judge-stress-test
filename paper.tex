@@ -5,11 +5,13 @@
 \usepackage{amsmath, amssymb}
 \usepackage{booktabs}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{hyperref}
 \usepackage{enumitem}
 \usepackage{xcolor}
+\emergencystretch=2em
 
-\title{Stress Testing LLM-as-a-Judge in Culturally Sensitive Annotation Tasks}
+\title{A Pilot Stress Test of LLM-as-a-Judge Robustness in Culturally Sensitive Annotation}
 
 \author{
 Maksym Yemelianenko \\
@@ -19,471 +21,552 @@ Wesley Zhuang \\
 Dorien Zhang
 }
 
-\date{December 2025}
+\date{June 2026}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-Large language models (LLMs) are increasingly used as automated judges for benchmarking, preference ranking, and large-scale data annotation. While these LLM-as-a-Judge systems offer substantial gains in scalability and efficiency, their reliability in subjective and culturally sensitive evaluation tasks remains poorly understood. In these domains, human disagreement is often expected and meaningful rather than simply noisy, raising concerns about whether LLM judges produce stable, calibrated, and representative judgments.
+Large language models (LLMs) are increasingly used as automated judges for benchmarking, preference ranking, and large-scale annotation. Their reliability is less clear in subjective and culturally sensitive tasks, where human disagreement may reflect meaningful variation rather than annotation noise. We present a \emph{pilot diagnostic stress test} of LLM-as-a-Judge robustness for offensiveness annotation. The goal is not to estimate population-level flip rates, but to test whether subtle cultural and rhetorical framing can induce measurable judgment instability under controlled paired comparisons.
 
-In this work, we study the robustness of LLM-as-a-Judge systems by reframing evaluation as a problem of \emph{judgment stability} rather than static accuracy. We introduce a control--perturbation stress-testing framework that systematically probes model sensitivity to non-semantic cues, including cultural framing, authority signals, verbosity, and positional effects, while preserving the underlying semantic content of each input. Model judgments are evaluated against human disagreement distributions in order to distinguish legitimate ambiguity from model-induced instability.
+We evaluate five contemporary LLM judges---Claude Haiku 4.5, GPT-5.4, Gemini 3.5 Flash, Llama 3.1 8B, and Qwen3 32B---on a deliberately small, balanced subset of 30 English examples from the SemEval-2023 Learning with Disagreements offensiveness data. Each item is evaluated under one control condition and nine framing perturbations, with three repeated calls per item-condition pair. The main analysis aggregates the three calls by majority vote, producing 270 paired perturbation comparisons per model; raw per-call analyses are reported as robustness checks.
 
-Empirical results across multiple LLM judge families reveal non-trivial and systematic vulnerabilities. Although overall judgment stability appears moderate, failures are highly concentrated in specific perturbation categories. In particular, cultural comparison framing consistently induces high-confidence label flips and large divergence from human annotations, even under deterministic inference. These effects remain stable across repeated trials, suggesting that the observed failures reflect inherent weaknesses in evaluative reasoning rather than stochastic variation.
-
-Our findings highlight the risks of deploying LLM-as-a-Judge systems in culturally sensitive, high-disagreement settings without explicit robustness evaluation. We argue that stress-testing evaluators themselves is a necessary step toward building disagreement-aware and culturally robust LLM-based evaluation pipelines.
+The pilot reveals possible instability across all models. Majority-vote label-flip rates range from 6.7\% for Gemini 3.5 Flash to 17.0\% for Claude Haiku 4.5, with Wilson 95\% intervals that remain wide because of the small sample. Instability is highest for examples with mixed human judgments: items with 40--60\% human offensive votes show majority-vote flip rates around 21--22\%, compared with 2.2\% for unanimously offensive items. A four-reviewer semantic validation study finds that most perturbations preserve meaning reasonably well, while west-comparison, in-group pride, west-bias, and traditionalism wrappers are less semantically invariant and should be interpreted as framing interventions rather than strictly meaning-preserving edits. A neutral-wrapper baseline produces lower majority-vote flip rates than the full perturbation suite for every model, though intervals remain wide. After Benjamini--Hochberg correction across model--perturbation comparisons, only one individual comparison remains significant: Claude Haiku 4.5 under west-comparison framing. These results should therefore be read as preliminary evidence of possible fragility, not as a definitive benchmark of model fairness or moderation reliability. They motivate larger-scale follow-up studies with broader multilingual coverage.
 \end{abstract}
+
+\noindent\textbf{Keywords:} LLM-as-a-Judge; pilot study; stress testing; human disagreement; cultural sensitivity; offensiveness detection; robustness.
 
 \section{Introduction}
 
-Large language models (LLMs) are increasingly used not only to generate text, but also to evaluate it. In modern machine learning pipelines, LLMs act as automated judges for benchmarking, preference ranking, model comparison, and large-scale data annotation. Their appeal is clear: they are faster, cheaper, and more scalable than human evaluation. As a result, LLM-as-a-Judge systems now play a central role in model development, alignment, moderation, and deployment.
+Large language models (LLMs) are increasingly used not only to generate text, but also to evaluate it. LLM-as-a-Judge systems now appear in model leaderboards, preference ranking pipelines, reward-model construction, red-teaming, and annotation workflows. Their appeal is clear: compared with human evaluation, they are fast, scalable, and easy to standardize. Prior work has shown that strong LLMs can correlate with human preferences in some open-ended evaluation settings \cite{zheng2023judging}. As a result, LLM judges are becoming part of the infrastructure through which models are selected, aligned, and deployed.
 
-However, as these systems are given greater evaluative authority, an important question arises: are LLM judges reliable in domains where judgment is subjective, culturally contingent, and naturally contested? Unlike technical tasks with clear ground-truth answers, tasks such as offensiveness detection, hate speech classification, norm violation detection, and cultural interpretation often involve legitimate human disagreement. Differences in cultural background, social norms, language, identity, and context can lead annotators to disagree in meaningful ways. In these settings, disagreement is not merely annotation noise; it is part of the signal.
+However, giving models evaluative authority raises a reliability question: are LLM judges stable in domains where human judgment is subjective, culturally contingent, and legitimately contested? Tasks such as offensiveness detection, hate speech classification, sexism detection, political norm interpretation, and cultural sensitivity annotation often lack a single unambiguous ground truth. In these settings, disagreement among annotators may reflect differences in background, identity, pragmatic inference, social norms, or tolerance for harmful speech \cite{uma2021semeval,leonardelli2023semeval,plank2022problem}. Treating such disagreement as noise can erase minority interpretations or create false consensus.
 
-Prior work has shown that LLM judges can be sensitive to shallow or surface-level features of the input. Models may prefer longer responses, later-positioned answers, authoritative phrasing, or outputs resembling their own style, even when the underlying content is unchanged. These findings raise concerns that LLM judges may sometimes evaluate presentation rather than meaning. Yet less is known about how these vulnerabilities manifest in culturally sensitive settings where disagreement is expected.
+This paper reframes the problem as a \emph{pilot robustness stress test}. Because this study uses a deliberately small, balanced subset of 30 examples, the results should be interpreted as a diagnostic stress test rather than a population-level estimate of model behavior. Our goal is to examine whether culturally framed perturbations can induce instability in LLM-as-Judge offensiveness decisions under controlled conditions. We therefore emphasize paired within-item comparisons, uncertainty intervals, self-consistency checks, and cautious interpretation.
 
-We identify three central challenges.
-
-\paragraph{Challenge 1: Shallow Judgment Bias.}
-Existing studies demonstrate that LLM judges can be influenced by non-semantic cues such as formatting, length, ordering, and rhetorical style. These factors can produce systematic preference shifts even when substantive content remains unchanged. However, such biases have primarily been studied in relatively objective or controlled evaluation settings, leaving open the question of how they affect culturally sensitive annotation tasks.
-
-\paragraph{Challenge 2: Erasure of Human Disagreement.}
-Recent work suggests that LLM judges often collapse ambiguous or borderline cases into single confident labels. In high-disagreement settings, this behavior risks replacing nuanced human judgment with artificially sharp decisions, potentially suppressing minority interpretations and amplifying dominant cultural assumptions.
-
-\paragraph{Challenge 3: Fragility Under Cultural Framing.}
-Culturally grounded evaluation can be affected by framing choices that signal ideology, authority, group identity, or social comparison. A statement may be interpreted differently when embedded in national, religious, institutional, or civilizational framing, even if the underlying semantic content remains unchanged. Whether LLM judges remain stable under these framing changes remains underexplored.
-
-In this paper, we argue that evaluating LLM judges through static accuracy alone is insufficient for understanding their behavior in subjective domains. Instead, we frame evaluation as a problem of \emph{judgment stability}: whether a model's evaluation remains consistent when semantic content is held constant but presentation varies.
-
-To study this problem, we introduce a systematic control--perturbation framework for stress-testing LLM judges. The framework evaluates original inputs alongside minimally modified variants that preserve task-relevant meaning while altering framing, tone, authority cues, verbosity, or positional structure. By comparing model outputs across control and perturbed conditions, we measure whether LLM judges are robust to non-semantic variation.
-
-Our analysis grounds model judgments against human disagreement distributions, allowing us to distinguish legitimate ambiguity from model-induced instability. Across multiple LLM judge families, we show that certain perturbations, especially cultural comparison framing, produce concentrated and high-confidence divergences from human judgments. These failures are systematic rather than stochastic, revealing stable vulnerabilities in evaluative reasoning.
-
-We address the following research questions:
+We ask three research questions:
 
 \begin{itemize}[leftmargin=*]
-    \item How stable are LLM judgments in tasks characterized by genuine human disagreement?
-    \item Do non-semantic, culturally or rhetorically motivated cues systematically bias LLM judges?
-    \item How do such vulnerabilities differ across model families and evaluation settings?
+    \item \textbf{RQ1:} Under a majority-vote repeated-call protocol, do LLM judges show label instability when the same base text is presented with cultural or rhetorical framing?
+    \item \textbf{RQ2:} Are observed flips concentrated in particular perturbation types or human-disagreement levels?
+    \item \textbf{RQ3:} How much of the observed instability appears to exceed baseline repeated-call variation within the same condition?
 \end{itemize}
 
 \subsection{Contributions}
 
-This work makes the following contributions:
+This work makes four contributions:
 
 \begin{itemize}[leftmargin=*]
-    \item We introduce a stress-testing framework for LLM-as-a-Judge systems that treats evaluation as a problem of judgment stability rather than static accuracy.
-    \item We design a taxonomy of content-preserving perturbations that isolate sensitivity to cultural framing, authority cues, verbosity, and positional effects.
-    \item We empirically evaluate multiple LLM judge families on datasets with known human disagreement, measuring label flips, confidence shifts, and divergence from human annotation distributions.
-    \item We identify systematic and model-dependent failure modes, particularly under cultural comparison framing, that reveal concentrated vulnerabilities in LLM-based evaluation.
-    \item We discuss the risks of deploying LLM judges in culturally sensitive, high-disagreement domains and outline directions for more robust, accountable, and disagreement-aware evaluation practices.
+    \item We introduce a small paired stress-test protocol for evaluating LLM-as-a-Judge robustness in a culturally sensitive annotation task.
+    \item We report uncertainty estimates, majority-vote analyses, raw repeated-call robustness checks, self-consistency measures, paired McNemar tests, and false-discovery-rate adjusted p-values.
+    \item We analyze instability by model, perturbation type, human agreement level, and individual item, showing that the strongest pilot effects occur in high-disagreement examples and a small number of model--perturbation cells.
+    \item We release reproducible artifacts including selected item IDs, prompt templates, perturbation templates, raw outputs, parsed judgments, paired comparisons, and analysis scripts.
 \end{itemize}
 
 \section{Related Work}
 
-\subsection{LLM-as-a-Judge and Surface-Level Evaluation Biases}
+\subsection{LLM-as-a-Judge}
 
-Recent research has increasingly examined the use of large language models as evaluators rather than solely as generators. In this setting, LLMs are used to score answers, compare model outputs, rank preferences, annotate data, and evaluate benchmark performance. This shift is driven by the promise of faster and more scalable evaluation compared to human annotation, especially as model outputs become more complex and open-ended.
+LLM-based evaluation has become a prominent alternative to human evaluation for open-ended generation tasks. Early work showed that LLMs can serve as reference-free evaluators for generation and translation quality \cite{liu2023geval,kocmi2023large}. Zheng et al. \cite{zheng2023judging} introduced MT-Bench and Chatbot Arena, showing that strong LLM judges can approximate human preferences while also identifying limitations such as position and verbosity bias. Recent surveys characterize LLM-as-a-Judge as a rapidly expanding evaluation paradigm with unresolved reliability and bias challenges \cite{gu2024survey}. Follow-up work has studied positional sensitivity \cite{wang2023large,wang2025judging}, verbosity bias \cite{saito2023verbosity}, self-preference \cite{panickssery2024llm,li2024justice}, and broader evaluation fragility \cite{li2024justice}. This literature motivates our premise: if LLMs are used as evaluators, the evaluators themselves need stress testing.
 
-However, a growing body of work suggests that LLM judges are not neutral evaluators. Instead, they may introduce systematic biases that propagate downstream when their judgments are used for model selection, alignment, moderation, or training. One line of prior work documents surface-level biases in LLM-as-a-Judge systems. For example, position bias occurs when evaluators prefer answers based on their ordering rather than their content. Verbosity bias occurs when longer responses are rated more favorably regardless of whether they contain substantively better information. Other related findings point to authority cues, stylistic preferences, and self-preference effects, where models favor outputs that resemble their own style or are framed as expert-endorsed.
+\subsection{Human Disagreement and Subjective Annotation}
 
-Together, these findings show that LLM judges can be influenced by presentation rather than meaning. Most existing work, however, studies these effects in relatively objective or controlled settings. Less attention has been paid to how such biases interact with culturally sensitive tasks in which disagreement is expected.
+Human label variation is increasingly recognized as a central issue in NLP evaluation \cite{plank2022problem}. In subjective tasks, annotator disagreement can reflect valid interpretive diversity rather than annotator error. Pavlick and Kwiatkowski \cite{pavlick2019inherent}, for example, show that some inference disagreements persist even after additional judgments and context variation. Work on learning from disagreement argues that preserving multiple annotations can improve modeling and evaluation for socially grounded tasks \cite{uma2021semeval,leonardelli2023semeval,davani2022dealing}. The SemEval Learning with Disagreements tasks provide benchmark datasets explicitly designed around this perspective \cite{uma2021semeval,leonardelli2023semeval}.
 
-\subsection{Human Disagreement in Subjective and Cultural Annotation}
+\subsection{Cultural Framing and Moderation Sensitivity}
 
-Subjective and culturally sensitive annotation tasks differ from technical evaluation because they often lack a single ground-truth label. Tasks such as offensiveness detection, hate speech classification, sexism detection, and norm violation judgment are shaped by context, culture, identity, and interpretation. In such domains, annotator disagreement may reflect meaningful variation rather than error.
+Offensiveness and harmful-speech judgments are culturally and pragmatically sensitive. Prior work on hate-speech detection shows that annotator and model judgments can encode social and dialectal bias; Sap et al. \cite{sap2019risk} show that dialect markers can be spuriously associated with toxicity labels and downstream classifier behavior. The perceived severity of a text may depend on speaker identity, audience, local norms, political context, rhetorical genre, and social power. Our perturbations are proxies for cultural and rhetorical framing, not claims about real cultural identity. We use them to test whether LLM judgments shift when such cues are introduced.
 
-Prior work on disagreement modeling has shown that LLMs often struggle to represent the full distribution of human judgments. Instead of preserving uncertainty, models may collapse ambiguous cases into single confident labels. This is particularly problematic in culturally sensitive settings, where disagreement can arise from sarcasm, dialect, local norms, political context, religious norms, or social identity.
+\section{Experimental Design}
 
-Datasets designed around learning with disagreement, such as multilingual offensiveness or sexism detection benchmarks, make this issue especially visible. Rather than assigning a single gold label, these datasets capture empirical distributions of human annotations. This makes them useful for studying whether LLM judges align with human disagreement or erase it.
+\subsection{Dataset and Scope}
 
-\subsection{Our Contribution}
+We use the offensiveness detection data from SemEval-2023 Task 11: Learning with Disagreements (LeWiDi) \cite{leonardelli2023semeval}. Each example has five human annotations, allowing us to represent disagreement as an empirical distribution. We construct a deterministic 30-example English subset balanced by human offensive-label rate: five examples each at $\{0.0,0.2,0.4,0.6,0.8,1.0\}$. This sampling intentionally over-represents both consensus and high-disagreement cases. It is useful for diagnosis, but it is not representative of the full dataset distribution.
 
-Our work connects these two research directions by asking whether surface-level evaluation biases and disagreement collapse interact in culturally sensitive settings. Rather than studying bias or disagreement in isolation, we stress-test LLM judges using culturally loaded and rhetorically motivated perturbations, including cultural framing, authority signals, verbosity, and position-based manipulations.
+\subsection{Units of Analysis}
 
-By measuring judgment flips, confidence drift, and divergence from human annotation distributions, we reframe subjective evaluation as a robustness problem. This approach directly probes the fragility of LLM judges in domains where cultural nuance, ambiguity, and interpretation are central.
-
-\section{Methodology}
-
-\subsection{Overview}
-
-This work evaluates the reliability of LLM-as-a-Judge systems in subjective, culturally sensitive annotation tasks. Rather than treating evaluation as static agreement with a single ground-truth label, we define judgment reliability in terms of stability under non-semantic perturbations.
-
-The central hypothesis is that judgments for culturally sensitive content should remain relatively invariant under content-preserving changes to framing, tone, or contextual emphasis. If semantic content is unchanged, then large changes in model judgment suggest that the judge is sensitive to presentation rather than meaning.
-
-To test this hypothesis, we introduce a control--perturbation framework. In this framework, LLM judges evaluate both original inputs and minimally modified variants. Divergence in labels, confidence scores, rationales, or alignment with human disagreement distributions is interpreted as evidence of bias or fragility in the judging process.
-
-\subsection{Task Formulation}
-
-Let $x$ denote an input text drawn from a subjective annotation task. An LLM judge $f_{\theta}$ is prompted to produce three outputs:
-
-\begin{enumerate}[leftmargin=*]
-    \item a categorical label, such as \textit{offensive} or \textit{not offensive};
-    \item a scalar confidence score;
-    \item a short natural-language rationale.
-\end{enumerate}
-
-Human annotations for each input are represented as an empirical distribution $H_x$, rather than a single ground-truth label. This distribution reflects the extent and direction of human disagreement.
-
-The model's output distribution for an input is denoted as $M_x$. When repeated trials are performed, $M_x$ is estimated from the empirical distribution of model predictions across trials.
-
-\subsection{Control--Perturbation Framework}
-
-For each input $x$, we construct two classes of inputs:
+We use the following terminology throughout the paper:
 
 \begin{itemize}[leftmargin=*]
-    \item a control input $x^{(0)} = x$;
-    \item a set of perturbed inputs $\{x^{(p)}\}$, where each perturbation preserves task-relevant semantic content.
+    \item \textbf{Base item:} one original text from LeWiDi.
+    \item \textbf{Condition:} the control text or one perturbed version of the same item.
+    \item \textbf{Trial:} one model response to one item under one condition.
+    \item \textbf{Repetition:} repeated sampling of the same item-condition pair. We use three repetitions.
+    \item \textbf{Majority label:} the majority vote across the three repeated labels for one model, item, and condition.
+    \item \textbf{Flip:} a perturbation majority label differs from the matched control majority label for the same model and base item.
 \end{itemize}
 
-Each perturbation is formalized as a deterministic transformation:
-
-\begin{equation}
-    \phi_p : x \rightarrow x^{(p)}.
-\end{equation}
-
-The intended constraint is that $\phi_p$ changes the framing or presentation of the input while preserving the underlying meaning relevant to the annotation task. Therefore, differences in model output between $x^{(0)}$ and $x^{(p)}$ reflect sensitivity to contextual or stylistic cues rather than legitimate semantic variation.
+The main results use majority labels because they reduce the influence of within-condition stochasticity. The robustness appendix also reports raw per-trial flip rates, where each perturbation trial is paired with the corresponding control trial of the same repetition index.
 
 \subsection{Perturbation Taxonomy}
 
-Perturbations are organized into a taxonomy motivated by prior work on model bias, adversarial evaluation, and culturally sensitive annotation. The taxonomy includes the following categories:
-
-\paragraph{Cultural Framing.}
-These perturbations introduce in-group or out-group positioning, cultural context, or ideological framing without changing the core statement.
-
-\paragraph{Cultural Pride and Comparison.}
-These perturbations frame the text through civilizational comparison, national pride, cultural superiority, or contrast with another cultural group.
-
-\paragraph{Authority Signals.}
-These perturbations add references to expert consensus, institutional endorsement, religious authority, or official approval.
-
-\paragraph{Verbosity and Padding.}
-These perturbations add redundant, fluent, or padded phrasing without adding new semantic content.
-
-\paragraph{Position Bias.}
-These perturbations reorder information or alter polarity framing in multi-part inputs.
-
-\paragraph{Tone and Instructional Framing.}
-These perturbations modify the tone of the text, such as making it sound academic, urgent, hypothetical, or explanatory.
-
-Perturbations are applied independently, with selected compound perturbations used to examine interaction effects.
-
-\subsection{Repeated Evaluation and Stability}
-
-Each control--perturbation pair is evaluated across multiple repeated trials using identical prompts and parameters. Decoding is performed deterministically to minimize sampling variance. Because temperature is set to zero, observed variation across repeated trials reflects backend nondeterminism, model-level nondeterminism, or caching behavior rather than ordinary sampling noise.
-
-This design allows us to separate stable vulnerabilities from incidental variation.
-
-\subsection{Evaluation Metrics}
-
-Judgment robustness is assessed using four primary metrics.
-
-\paragraph{Attack Success Rate.}
-Attack Success Rate (ASR) measures the probability that a model's predicted label differs between the control and perturbed input:
-
-\begin{equation}
-    \mathrm{ASR}_p = \Pr \left[ f_{\theta}(x^{(p)}) \neq f_{\theta}(x^{(0)}) \right].
-\end{equation}
-
-\paragraph{Distributional Divergence.}
-Alignment with human disagreement is measured using Jensen--Shannon Divergence (JSD) between the model's empirical label distribution $M_x$ and the human annotation distribution $H_x$. Perturbation-induced divergence is defined as:
-
-\begin{equation}
-    \Delta \mathrm{JSD}_p =
-    \mathrm{JSD}(M_{x^{(p)}}, H_x) -
-    \mathrm{JSD}(M_{x^{(0)}}, H_x).
-\end{equation}
-
-Positive $\Delta \mathrm{JSD}$ indicates that the perturbation moves the model farther from the human disagreement distribution. Negative $\Delta \mathrm{JSD}$ indicates that the perturbed judgment is closer to the human distribution than the control judgment.
-
-\paragraph{Confidence Shift.}
-Confidence shift measures the absolute change in self-reported confidence between control and perturbed conditions:
-
-\begin{equation}
-    \Delta C_p = \left| C(x^{(p)}) - C(x^{(0)}) \right|.
-\end{equation}
-
-\paragraph{Directional Label Drift.}
-Directional label drift analyzes whether perturbations disproportionately shift predictions toward more conservative or more lenient labels. For offensiveness detection, this corresponds to shifts from \textit{not offensive} to \textit{offensive}, or from \textit{offensive} to \textit{not offensive}.
-
-Together, these metrics characterize both the frequency and qualitative nature of judgment instability.
-
-\section{Experimental Setup}
-
-\subsection{Dataset}
-
-Experiments are conducted using subjective annotation datasets in which human disagreement is expected and explicitly captured. The primary dataset is drawn from the SemEval 2023 Learning with Disagreement task on offensiveness detection.
-
-The task involves binary classification of short text snippets into \textit{offensive} and \textit{not offensive} categories. Each example is annotated by multiple human annotators, yielding an empirical label distribution rather than a single ground-truth label.
-
-For experimental tractability, a subset of 30 examples is used. For Claude Haiku 4.5, evaluation is restricted to the English subset. For GPT-4o-mini, evaluation spans 18 languages, including English, Arabic, Chinese, and several European languages.
-
-\subsection{Data Preprocessing}
-
-Input texts are minimally preprocessed in order to preserve original linguistic characteristics. No normalization beyond prompt wrapping is applied. Multilingual inputs are passed directly to the models without translation. Perturbations are applied after preprocessing to ensure consistent alignment between control and perturbed conditions.
-
-\subsection{Experimental Design}
-
-Each example is evaluated under a baseline control condition and multiple perturbation conditions. For every input:
-
-\begin{itemize}[leftmargin=*]
-    \item the control input $x^{(0)}$ is evaluated once per trial;
-    \item each perturbed input $x^{(p)}$ is evaluated under identical conditions;
-    \item all evaluations are repeated three times.
-\end{itemize}
-
-Comparisons are performed pairwise between control and perturbed judgments. Analyses include within-model comparisons, cross-model comparisons, and aggregation across perturbation categories.
-
-\subsection{Implementation Details}
-
-Experiments are conducted using API-based inference for each model. Claude Haiku 4.5 and GPT-4o-mini are evaluated with temperature set to zero and fixed maximum token limits. Prompt templates are versioned and logged.
-
-All perturbations are generated deterministically using fixed random seeds. Outputs are parsed using structured schemas to ensure consistency. Experimental configurations, raw judgments, and aggregated metrics are logged to support reproducibility.
-
-\subsection{Reproducibility}
-
-All experimental parameters, prompts, perturbations, and evaluation scripts are recorded. The full experimental pipeline is designed to support replication and extension to additional models, datasets, or perturbation categories.
-
-\section{Results and Analysis}
-
-\subsection{Overview}
-
-This section presents quantitative and qualitative results from stress-testing LLM-as-a-Judge systems under content-preserving but adversarial perturbations. Quantitative analyses measure judgment instability, divergence from human disagreement distributions, and directional bias under perturbation. Qualitative analyses examine representative failure cases in order to characterize systematic error patterns.
-
-\subsection{Overall Judgment Stability}
-
-Aggregate judgment stability across all control--perturbation pairs is summarized in Table~\ref{tab:overall-stability}. Reported metrics include overall flip rates, average divergence from human disagreement distributions, and flip directionality.
+We evaluate nine perturbation conditions plus the unmodified control. Table~\ref{tab:taxonomy} summarizes the intended mechanism for each perturbation family. The taxonomy is diagnostic rather than exhaustive; perturbations are designed to probe plausible routes by which framing may alter an LLM judge's interpretation.
 
 \begin{table}[h]
 \centering
-\begin{tabular}{lrrrr}
+\small
+\begin{tabular}{p{0.21\linewidth}p{0.42\linewidth}p{0.27\linewidth}}
 \toprule
-\textbf{Model} & \textbf{Pairs} & \textbf{Flip Rate} & \textbf{Mean $\Delta$JSD} & \textbf{Flip Directionality} \\
+\textbf{Perturbation family} & \textbf{Mechanism probed} & \textbf{Possible effect} \\
 \midrule
-Claude Haiku 4.5 & 1,980 & 10.35\% & 0.0805 & 100\% not$\rightarrow$off \\
-GPT-4o-mini & 1,980 & 11.8\% & 0.0213 & 55.8\% off$\rightarrow$not \\
+West comparison & Cross-cultural norm anchoring and comparison framing & May increase or decrease strictness depending on norm interpretation \\
+In-group pride & Identity and community-affirmation cue & May soften perceived harm or increase defensiveness \\
+Cultural context & Explicit claim that the statement is understood differently in a local context & May shift threshold for offensiveness \\
+Traditionalism & Cultural preservation / modern-decay framing & May sanitize or intensify moral judgment \\
+Authority & Expert-consensus cue & May increase deference to the wrapper framing \\
+Verbosity & Known LLM-judge sensitivity to fluent padding & May alter salience independent of base content \\
+Position/polarity & Affirmative or negative lead-in framing & May probe anchoring and polarity effects \\
 \bottomrule
 \end{tabular}
-\caption{Overall judgment stability across control--perturbation pairs.}
-\label{tab:overall-stability}
+\caption{Perturbation taxonomy and intended diagnostic mechanisms.}
+\label{tab:taxonomy}
 \end{table}
 
-Despite deterministic decoding, both models exhibit non-trivial instability under perturbation. Claude Haiku 4.5 displays a strongly conservative bias, with all observed flips shifting from \textit{not offensive} to \textit{offensive}. In contrast, GPT-4o-mini exhibits bidirectional drift, suggesting sensitivity to framing effects rather than a single directional bias.
+\subsection{Human Validation of Perturbations}
 
-These aggregate patterns motivate a more fine-grained analysis of perturbation-specific effects.
+To assess whether perturbations preserve the original meaning, we conducted a small human validation study. Four reviewers independently rated all 270 original--perturbed pairs on three 1--5 scales: meaning preservation, whether the edit added only framing, and whether the edit directly changed perceived offensiveness. The interface randomized item order, hid perturbation metadata by default, and repeated 10\% of pairs as blinded duplicate reliability checks. Duplicate-check mean absolute differences were 0.56 for meaning preservation, 0.54 for framing-only ratings, and 0.57 for direct-offensiveness-change ratings; 86--91\% of repeated ratings were within one scale point.
 
-\subsection{Perturbation Category Effects}
+Table~\ref{tab:human-validation} reports validation results. Position framing, verbosity, authority, and in-group cultural-context wrappers score above 4.0 on meaning preservation. West-comparison, in-group pride, west-bias, and traditionalism wrappers score below our 4.0 preservation analysis threshold, although their direct-offensiveness-change scores remain low. We therefore interpret these perturbations as controlled framing interventions rather than strictly semantic-preserving edits.
 
-To identify systematic sources of instability, perturbations are grouped by category and evaluated using average Attack Success Rate and divergence from human judgment. Results are reported in Table~\ref{tab:category-effects}.
+\begin{table}[H]
+\centering
+\scriptsize
+\input{hai-research/paper_artifacts/human_validation/semantic_validation_summary.tex}
+\caption{Human semantic validation of perturbations. Scores are means on 1--5 scales across four reviewers and 30 examples per perturbation ($n=120$ ratings each). Higher meaning and framing-only scores are better; lower direct-offensiveness-change scores are better. $^{\dagger}$ indicates mean meaning preservation below 4.0 or direct-offensiveness-change above 2.5.}
+\label{tab:human-validation}
+\end{table}
+
+\subsection{Models}
+
+We evaluate five contemporary LLM judges. Table~\ref{tab:models} lists the model identifiers reported for the experiment. Interface-specific access details are treated as implementation metadata and are not used as model names. Model references are provided for reproducibility \cite{anthropic2026models,openai2026gpt54,google2026gemini35,meta2024llama,qwen2025qwen3}.
 
 \begin{table}[h]
 \centering
-\begin{tabular}{lrrrr}
+\small
+\begin{tabular}{ll}
 \toprule
-\textbf{Category} & \multicolumn{2}{c}{\textbf{Claude}} & \multicolumn{2}{c}{\textbf{GPT-4o-mini}} \\
-\cmidrule(lr){2-3}
-\cmidrule(lr){4-5}
- & \textbf{ASR} & \textbf{Avg $\Delta$JSD} & \textbf{ASR} & \textbf{Avg $\Delta$JSD} \\
+\textbf{Display name} & \textbf{Reported model identifier} \\
 \midrule
-Cultural Pride / Comparison & 23.3\% & 0.173 & 16.1\% & 0.073 \\
-Authority Signals & 11.1\% & 0.083 & 11.7\% & 0.000 \\
-Cultural Framing & 11.7\% & 0.091 & 10.0\% & -0.016 \\
-Verbosity / Padding & 6.7\% & 0.053 & 15.6\% & -0.064 \\
-Position Bias & 6.7\% & 0.053 & 11.7\% & -0.028 \\
+Claude Haiku 4.5 & \texttt{claude-haiku-4-5-20251001} \\
+GPT-5.4 & \texttt{gpt-5.4} \\
+Gemini 3.5 Flash & \texttt{gemini-3.5-flash} \\
+Llama 3.1 8B & \texttt{llama-3.1-8b-instant} \\
+Qwen3 32B & \texttt{qwen/qwen3-32b} \\
 \bottomrule
 \end{tabular}
-\caption{Perturbation effectiveness by category.}
-\label{tab:category-effects}
+\caption{Judge models and reported identifiers used in the experiments.}
+\label{tab:models}
 \end{table}
 
-Cultural comparison framing emerges as the dominant vulnerability across both models, producing the highest flip rates and the largest divergence from human disagreement distributions. Several categories, including verbosity and position bias, increase flip rates while reducing $\Delta$JSD for GPT-4o-mini, indicating shifts toward leniency rather than adversarial degradation.
+\subsection{Protocol and Randomness}
 
-\subsection{Most Effective Individual Perturbations}
+For each model, we evaluate 30 base items under 10 main-suite conditions: one control and nine perturbations. Each item-condition pair is repeated three times, yielding 900 judgments per model and 4,500 main-suite judgments total. The main paired analysis compares $30 \times 9 = 270$ majority-label perturbation pairs per model. Raw per-trial robustness checks compare $30 \times 9 \times 3 = 810$ paired trials per model. We additionally run a neutral-wrapper baseline with one control and one neutral condition, adding 180 judgments per model and 900 judgments overall.
 
-The most effective individual perturbations, ranked by Attack Success Rate, are shown in Table~\ref{tab:individual-perturbations}.
+The perturbation selection seed is 1337. The judge prompt is fixed across models, with prompt hash \texttt{6b67535b23a51992a5e09ca814fde4aa9bf3a12935a23e09d986c85c1b33b403}. Temperature is set to 0.0 for all runs. Max output tokens are 64 for four models and 160 for Qwen3 32B because its responses required more room for parseable rationales. API-level random seeds and top-p controls were not available uniformly across all providers, so repeated calls are treated as samples from each model's operational judgment distribution. Calls were made on June 25--26, 2026. Raw outputs are cached; failed calls are rerun for the same item-condition cell, while successful judgments are not manually edited.
 
-\begin{table}[h]
+\section{Metrics and Statistical Analysis}
+
+\subsection{Label Instability}
+
+For a model $m$, item $i$, perturbation $p$, and majority label function $Y(\cdot)$, a flip occurs when
+
+\begin{equation}
+    Y_m(x_i^{(p)}) \neq Y_m(x_i^{(0)}),
+\end{equation}
+
+where $x_i^{(0)}$ is the control condition. Attack Success Rate (ASR), used here simply as a label-flip rate, is
+
+\begin{equation}
+    \mathrm{ASR} = \frac{\#\text{perturbation comparisons where label differs from control}}{\#\text{total perturbation comparisons}}.
+\end{equation}
+
+We report Wilson 95\% confidence intervals for all ASR estimates \cite{wilson1927probable}. Because the sample is small and balanced by design, these intervals should be interpreted as uncertainty for the pilot sample, not as population confidence intervals for the full LeWiDi distribution.
+
+\subsection{Distributional Divergence}
+
+Human annotations are represented as an empirical distribution $H_i$ over \{\textit{offensive}, \textit{not offensive}\}. For a model majority label, we use a one-hot distribution $M_i$. Jensen--Shannon divergence is computed as
+
+\begin{equation}
+    \mathrm{JSD}(M_i,H_i)=\frac{1}{2}\mathrm{KL}(M_i||A_i)+\frac{1}{2}\mathrm{KL}(H_i||A_i),\quad A_i=\frac{M_i+H_i}{2}.
+\end{equation}
+
+With base-2 logarithms, JSD ranges from 0 to 1. Larger values indicate greater divergence between the model's categorical judgment and the human label distribution. We report
+
+\begin{equation}
+    \Delta \mathrm{JSD}_p = \mathrm{JSD}(M_i^{(p)},H_i)-\mathrm{JSD}(M_i^{(0)},H_i).
+\end{equation}
+
+Positive $\Delta$JSD means the perturbation moves the model farther from the human distribution; negative values mean it moves closer. We interpret $\Delta$JSD comparatively rather than as an absolute harm threshold.
+
+\subsection{Paired Tests and Multiple Comparisons}
+
+Because each perturbation is paired with a control judgment for the same base item, we use paired tests rather than treating observations as independent. For each model--perturbation pair, we apply McNemar's exact test to the majority-label control and perturbation outcomes \cite{mcnemar1947note}. We report raw p-values and Benjamini--Hochberg false-discovery-rate adjusted q-values across the 45 model--perturbation comparisons \cite{benjamini1995controlling}. Since our analysis compares multiple models and perturbation types, we treat uncorrected comparisons as exploratory. For confidence changes, we use Wilcoxon signed-rank tests over paired confidence differences and again report BH-adjusted values.
+
+\section{Results}
+
+\subsection{Self-Consistency Across Repeated Calls}
+
+Before attributing changes to perturbations, we estimate baseline repeated-call stability. Table~\ref{tab:self-consistency} reports the proportion of item-condition cells in which all three repeated labels agree. Control-only unanimity ranges from 86.7\% for Claude Haiku 4.5 to 100\% for Llama 3.1 8B. This indicates that most cells are internally stable, but some observed flips may still reflect operational stochasticity rather than perturbation-specific effects.
+
+\begin{table}[H]
 \centering
-\begin{tabular}{llrr}
-\toprule
-\textbf{Perturbation} & \textbf{Model} & \textbf{ASR} & \textbf{$\Delta$JSD} \\
-\midrule
-Cultural pride / west comparison & Claude & 32.22\% & 0.235 \\
-Cultural pride / west comparison & GPT-4o-mini & 24.4\% & 0.139 \\
-Authority / expert consensus & Claude & 14.44\% & 0.111 \\
-Traditionalism / modern decay & GPT-4o-mini & 15.6\% & -0.064 \\
-Verbosity / padded fluent & GPT-4o-mini & 15.6\% & -0.064 \\
-\bottomrule
-\end{tabular}
-\caption{Most effective individual perturbations by Attack Success Rate.}
-\label{tab:individual-perturbations}
+\small
+\input{hai-research/paper_artifacts/robustness/self_consistency.tex}
+\caption{Repeated-call self-consistency by model. Unanimity is the share of item-condition cells where all three repeated labels match.}
+\label{tab:self-consistency}
 \end{table}
 
-The west-comparison perturbation is a clear outlier for both models. It produces failure rates more than double the category average and yields the largest observed divergence from human annotations. These failures often manifest as high-confidence false positives, suggesting systematic overcorrection rather than stochastic variation.
+\subsection{Label Instability by Model}
 
-\subsection{Self-Consistency Across Trials}
+Table~\ref{tab:overall-majority} reports majority-vote ASR by model. The highest observed pilot flip rates are Claude Haiku 4.5 at 17.0\% and Llama 3.1 8B at 16.7\%. GPT-5.4 and Gemini 3.5 Flash show lower majority-vote flip rates, 7.8\% and 6.7\%, respectively. The intervals are intentionally reported and remain wide, reflecting the small diagnostic sample.
 
-Despite instability under perturbation, both models demonstrate high self-consistency across repeated trials. Claude Haiku 4.5 achieves 0.992 agreement across three runs, while GPT-4o-mini produces identical outputs under deterministic caching.
+\begin{table}[H]
+\centering
+\small
+\input{hai-research/paper_artifacts/robustness/majority_overall_asr.tex}
+\caption{Majority-vote label instability by model. The unit is one model--item--perturbation pair after aggregating three repeated calls per condition.}
+\label{tab:overall-majority}
+\end{table}
 
-These results indicate that the observed vulnerabilities reflect stable model behavior rather than sampling variance. In other words, the failures are not random; they are reproducible under identical evaluation conditions.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\linewidth]{hai-research/paper_artifacts/robustness/figures/majority_asr_by_model.pdf}
+\caption{Majority-vote ASR by model with Wilson 95\% intervals.}
+\label{fig:asr-model}
+\end{figure}
 
-\subsection{Qualitative Error Analysis}
+Raw per-trial results are similar in ordering but slightly higher for GPT-5.4 and Gemini 3.5 Flash: Claude Haiku 4.5 17.5\%, Llama 3.1 8B 16.8\%, Qwen3 32B 11.9\%, GPT-5.4 10.1\%, and Gemini 3.5 Flash 9.5\%. We therefore use majority-vote results as the main analysis and raw per-call results as a robustness check.
 
-\subsubsection{Cultural Comparison False Positives}
+\subsection{Neutral Wrapper Baseline}
 
-A recurring failure pattern involves neutral or ambiguous expressions being reclassified as offensive when embedded in cultural comparison framing. For example, a statement framed with language such as ``Unlike Western approaches, we recognize that \ldots'' may trigger model rationales that cite condescension, ideological superiority, or cultural hostility, even when the original text does not contain a direct insult or target.
+To test whether models flip merely because extra text is added, we ran an additional neutral-wrapper baseline. The neutral condition prepends a source/context statement---``The following text is from an online discussion:''---without adding cultural, authority, traditionalist, or polarity cues. Table~\ref{tab:neutral-baseline} compares majority-vote neutral ASR with the full perturbation-suite ASR from Table~\ref{tab:overall-majority}. Neutral ASR is lower than the full perturbation-suite ASR for every model, suggesting that the observed effects are not explained solely by adding wrapper text. However, the neutral baseline also produces nonzero flips for four models and confidence intervals overlap for several comparisons, so this result should be treated as supportive rather than conclusive.
 
-This pattern suggests that models may overreact to cultural contrast markers, treating comparison itself as evidence of offensiveness. Such behavior is especially concerning in multilingual and cross-cultural annotation settings, where comparison, contrast, and group-based framing may be common rhetorical devices.
+\begin{table}[H]
+\centering
+\small
+\input{hai-research/paper_artifacts/neutral_baseline/neutral_majority_asr.tex}
+\caption{Neutral-wrapper baseline compared with the full perturbation suite. The neutral condition adds source/context text without cultural or evaluative framing.}
+\label{tab:neutral-baseline}
+\end{table}
 
-\subsubsection{Authority-Induced Reinterpretation}
+\subsection{Perturbation Effects and Multiple Comparisons}
 
-Authority cues, such as expert consensus or institutional endorsement, also increase perceived severity. In some cases, rhetorical or colloquial statements become more likely to be judged offensive when framed as supported by experts, institutions, or cultural authorities.
+Across all models, west-comparison framing has the highest majority-vote ASR at 16.7\%, followed by in-group pride at 14.0\%, west-bias framing and authority framing at 13.3\%, and traditionalism at 12.7\% (Table~\ref{tab:perturbation-asr}). These differences are suggestive rather than definitive; intervals overlap substantially. The human validation results in Table~\ref{tab:human-validation} are important for interpretation: several high-ASR cultural/traditionalism wrappers were also rated as less meaning-preserving, so we treat them as culturally loaded framing interventions rather than pure invariance tests.
 
-These effects are consistent but less extreme than those induced by cultural comparison framing. They suggest that LLM judges may treat authority signals as amplifiers of social meaning, even when the underlying content remains unchanged.
+\begin{table}[H]
+\centering
+\small
+\input{hai-research/paper_artifacts/robustness/perturbation_asr.tex}
+\caption{Majority-vote ASR by perturbation type, aggregated across models. The unit is one model--item pair for a given perturbation.}
+\label{tab:perturbation-asr}
+\end{table}
 
-\subsubsection{Leniency Under Verbosity}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{hai-research/paper_artifacts/robustness/figures/model_perturbation_heatmap.pdf}
+\caption{Majority-vote ASR heatmap by model and perturbation. Cell values are percentages rounded to the nearest integer.}
+\label{fig:heatmap}
+\end{figure}
 
-For GPT-4o-mini, verbose or redundantly phrased inputs frequently flip judgments from \textit{offensive} to \textit{not offensive}. This behavior aligns with the negative $\Delta$JSD values observed for verbosity-related perturbations. Fluency, elaboration, and polished phrasing appear to reduce perceived severity, even when the offensive content itself remains unchanged.
+Table~\ref{tab:paired-tests} lists the ten largest model--perturbation ASR cells and their paired-test results. After BH correction across 45 tests, only Claude Haiku 4.5 under west-comparison framing remains below $q<0.05$. This does not prove a general cultural bias mechanism; it indicates that, in this pilot, one model--framing combination produced a statistically distinguishable directional shift under paired testing.
 
-This finding is important because it suggests that LLM judges may be more forgiving toward well-written or elaborate statements, potentially creating unequal treatment between concise and verbose inputs.
+\begin{table}[H]
+\centering
+\scriptsize
+\input{hai-research/paper_artifacts/robustness/top_model_perturbation_tests.tex}
+\caption{Largest model--perturbation ASR cells with McNemar exact p-values and Benjamini--Hochberg adjusted q-values. Uncorrected results are exploratory.}
+\label{tab:paired-tests}
+\end{table}
 
-\subsection{Summary of Findings}
+\subsection{Instability by Human Agreement Level}
 
-Overall, LLM judges exhibit moderate robustness but concentrated vulnerabilities to specific non-semantic cues. Cultural comparison framing constitutes the dominant failure mode across models, producing high-confidence divergence from human judgment. Authority signals and verbosity further modulate decisions in systematic and model-dependent ways, underscoring the need for targeted stress-testing before deploying LLM judges in culturally sensitive annotation pipelines.
+The balanced sample lets us examine whether instability concentrates in ambiguous examples. Table~\ref{tab:agreement-asr} and Figure~\ref{fig:agreement} show that examples with mixed human labels have the highest observed ASR: 20.9\% for 40\% offensive items and 22.2\% for 60\% offensive items. In contrast, unanimously offensive items have a 2.2\% flip rate. This pattern suggests that LLM judges may be especially framing-sensitive near the human decision boundary, although the pilot sample is too small to claim a general monotonic relationship.
+
+\begin{table}[H]
+\centering
+\small
+\input{hai-research/paper_artifacts/robustness/agreement_asr.tex}
+\caption{Majority-vote ASR by human offensive-label rate. Each level contains five base items, evaluated across five models and nine perturbations.}
+\label{tab:agreement-asr}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\linewidth]{hai-research/paper_artifacts/robustness/figures/asr_by_human_agreement.pdf}
+\caption{Majority-vote ASR by human offensive-label rate. Shaded intervals are Wilson 95\% intervals.}
+\label{fig:agreement}
+\end{figure}
+
+Per-item analysis also shows concentration: the most unstable item accounts for 16 flips out of 45 possible model--perturbation comparisons, while several items show no flips. A full item-level table with IDs, human vote counts, flip counts, and most frequent flip perturbation is included in Appendix~\ref{app:item-table}. Leave-one-out analysis indicates that headline model ASRs vary by at most 3.1 percentage points when any single item is removed, suggesting that the overall ranking is not entirely driven by one example.
+
+\subsection{Confidence and Rationale Instability}
+
+Confidence changes are smaller than label changes but still informative. Table~\ref{tab:confidence} reports mean signed and absolute confidence shifts after majority aggregation. Four models show small negative signed shifts with BH-adjusted Wilcoxon values below 0.05, while Gemini 3.5 Flash shows no clear signed shift. These confidence changes should be interpreted cautiously: confidence scales are model-specific and not calibrated across providers.
+
+\begin{table}[H]
+\centering
+\small
+\input{hai-research/paper_artifacts/robustness/confidence_instability.tex}
+\caption{Confidence instability by model. $\Delta c$ is perturbed mean confidence minus control mean confidence after aggregating three repeated calls.}
+\label{tab:confidence}
+\end{table}
+
+Qualitatively, rationales often changed even when labels did not. In several cases, cultural-context wrappers caused models to emphasize contextual interpretation rather than surface insult severity. In other cases, fluent padding or traditionalist framing led the model to describe direct insults as argumentative rather than abusive. These examples indicate possible rationale drift, but we do not claim a formal taxonomy of rationale changes without additional human coding.
 
 \section{Discussion}
 
-\subsection{Interpretation of Findings}
+This pilot provides preliminary evidence that LLM judges can be sensitive to cultural and rhetorical framing in a subjective annotation task. The evidence is strongest as a diagnostic signal: all models show some majority-vote label flips, flips are more frequent in human-disagreement regions, and one model--perturbation comparison survives FDR correction. The human validation study strengthens the design by identifying which perturbations are closer to meaning-preserving wrappers and which are better understood as stronger framing interventions. At the same time, the study does not establish population-level rates, training-data causes, or broad claims about cultural bias. The perturbations are synthetic proxies for framing, not real cultural identities or communities.
 
-Our results demonstrate that LLM-as-a-Judge systems exhibit non-trivial fragility in culturally sensitive, high-disagreement settings, even under deterministic inference. Although overall flip rates remain moderate, failures are highly concentrated in specific perturbation categories, particularly cultural comparison framing.
+The direction of instability differs by model. Claude Haiku 4.5, GPT-5.4, and Gemini 3.5 Flash more often shift from \textit{not offensive} to \textit{offensive} among flipped cases, while Llama 3.1 8B and Qwen3 32B more often shift from \textit{offensive} to \textit{not offensive}. This suggests that robustness audits should report directionality rather than only aggregate flip rates.
 
-The consistent emergence of high-confidence false positives under cultural comparison perturbations suggests that LLM judges may overcorrect for perceived cultural or ideological risk. Instead of preserving ambiguity, the models sometimes produce judgments that diverge sharply from human disagreement distributions. Importantly, these failures are systematic rather than stochastic, indicating that they reflect stable properties of model reasoning rather than sampling noise.
+For evaluation pipelines, the practical implication is that LLM judges should not be treated as fixed measurement instruments in high-disagreement settings. Before they are used to label culturally sensitive data or arbitrate subjective disputes, they should be evaluated under perturbations, repeated calls, uncertainty intervals, and item-level diagnostics. A small stress test cannot replace large-scale evaluation, but it can reveal candidate fragilities worth testing at scale.
 
-The directionality of judgment drift also reveals meaningful model differences. Claude Haiku 4.5 exhibits strictly conservative behavior, consistently shifting from \textit{not offensive} to \textit{offensive} under perturbation. GPT-4o-mini, by contrast, shifts bidirectionally depending on perturbation type. This suggests that robustness profiles are model-dependent and cannot be inferred from aggregate accuracy alone.
+\section{Limitations}
 
-Overall, these findings reinforce the concern that shallow cues, including framing, authority signals, and stylistic elaboration, can disproportionately influence evaluative judgments in contexts where underlying meaning is unchanged.
+This study should be read as evidence of possible fragility under controlled framing changes, not as a definitive benchmark of model fairness or moderation reliability. The main limitations are:
 
-\subsection{Implications for LLM-Based Evaluation}
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Small sample.} The study uses 30 English examples. This limits generalizability and yields wide confidence intervals.
+    \item \textbf{Balanced rather than representative sampling.} The subset is balanced by human agreement level and is not intended to match the full LeWiDi distribution.
+    \item \textbf{Synthetic perturbations.} Human validation shows that several wrappers are not perfectly semantically invariant. They are diagnostic probes and framing interventions, not validated representations of real cultural context.
+    \item \textbf{Small validation pool.} The perturbation validation uses four reviewers. This is useful for detecting problematic templates, but it is not a large-scale validation of semantic equivalence.
+    \item \textbf{Neutral baseline remains small.} We include a neutral-wrapper baseline, but it uses the same 30-item pilot sample. Larger samples are needed to precisely separate generic wrapper effects from culture-specific framing effects.
+    \item \textbf{Single task and language.} Results may not transfer beyond English offensiveness detection.
+    \item \textbf{Single prompt template.} Prompt wording may affect judge behavior.
+    \item \textbf{Provider time sensitivity.} Model versions and serving behavior may change over time. We record exact model identifiers and run metadata, but provider-side implementation details are not fully observable.
+    \item \textbf{Operational randomness.} Temperature was set to 0.0, but API-level seed control was not uniformly available. Repeated calls are therefore treated as samples from each model's operational behavior.
+    \item \textbf{Human labels are not neutral ground truth.} Human offensiveness judgments themselves encode disagreement and cultural variation.
+\end{itemize}
 
-These findings have direct implications for the use of LLM judges in both research and deployment.
+\section{Ethical Considerations}
 
-First, they challenge the assumption that LLM-as-a-Judge systems provide stable or impartial evaluation in subjective domains. In tasks involving culture, identity, offense, or social norms, judgment stability cannot be assumed simply because the model is deterministic or highly capable.
+This work studies offensive-language annotation and therefore includes examples and model rationales that may contain insulting or harmful content. We minimize exposure by reporting item IDs and short qualitative summaries rather than reproducing large amounts of offensive text. The goal is not to build a stronger offensive-language classifier or automate moderation decisions, but to audit the reliability of LLM judges before they are used in culturally sensitive annotation pipelines. Because the task involves subjective social judgments, we avoid treating majority vote as the only valid target and preserve human disagreement distributions throughout the analysis.
 
-Second, the observed divergence from human disagreement distributions suggests that replacing human annotators with LLM judges risks erasing legitimate ambiguity. When models collapse disagreement into confident labels, they may suppress minority interpretations and create the appearance of consensus where none exists.
+\section{Artifact Availability}
 
-Third, the concentration of failures in specific perturbation categories suggests that robustness evaluation should be targeted rather than purely aggregate. A model with acceptable average performance may still fail systematically under culturally meaningful framing conditions.
+The experimental pipeline records configuration files, selected item IDs, prompts, perturbation templates, raw model outputs, parsed judgments, paired comparisons, generated tables, human validation ratings, and analysis scripts. No API keys or credentials are included. Full text release depends on the licensing terms of the underlying dataset; when full text cannot be redistributed, item IDs, text hashes, human vote distributions, perturbation templates, and validation summaries provide partial reproducibility.
 
-These results motivate robustness-oriented evaluation protocols that explicitly test sensitivity to non-semantic perturbations before LLM judges are deployed in high-stakes settings.
+\section{Conclusion}
 
-\subsection{Limitations}
-
-This study has several limitations.
-
-First, the sample size is limited. The experiment uses a subset of 30 examples for tractability. While this is sufficient for exploratory stress-testing, larger samples would be needed to draw stronger statistical conclusions.
-
-Second, the evaluation of open-weight models was constrained by access and stability issues. In particular, experimentation with LLaMA-class models was limited due to revoked or unstable access during the study, preventing full-scale repeated trials comparable to those conducted for closed models. As a result, conclusions about open-weight model robustness should be interpreted with caution.
-
-Third, while the perturbation taxonomy covers several well-motivated sources of bias, it does not exhaust the space of possible manipulations that may affect LLM judges. Other factors, such as multilingual prompting, code-switching, implicit social hierarchies, dialect variation, and pragmatic context, remain unexplored.
-
-Fourth, although this work uses datasets with known human disagreement, human annotations themselves are imperfect and context-dependent. No single empirical distribution can serve as a definitive representation of all possible interpretations.
-
-Finally, this analysis focuses on judgment outputs rather than downstream effects. Future work is needed to quantify how judgment instability propagates through training, moderation, policy enforcement, and benchmark construction pipelines.
-
-\section{Conclusion and Future Work}
-
-\subsection{Conclusion}
-
-This work examined the reliability of LLM-as-a-Judge systems in subjective, culturally sensitive annotation tasks where disagreement among human annotators is expected and meaningful. Rather than evaluating these systems solely through static accuracy, we reframed judgment reliability as a problem of stability under content-preserving perturbations.
-
-We introduced a control--perturbation stress-testing framework to operationalize this notion of judgment stability. By grounding evaluation against human disagreement distributions, the framework distinguishes legitimate ambiguity from model-induced instability. Empirical evaluation across multiple LLM judge families revealed that although overall flip rates remain moderate, failures are highly concentrated in specific perturbation categories.
-
-In particular, cultural comparison framing emerged as a dominant source of instability, producing systematic and high-confidence divergences from human annotations. These effects were consistent across repeated trials, indicating stable vulnerabilities rather than stochastic noise.
-
-Taken together, these findings show that LLM-as-a-Judge systems cannot be assumed to provide stable or impartial evaluation in culturally sensitive, high-disagreement settings. Sensitivity to shallow framing cues risks collapsing human nuance and amplifying bias when these systems are embedded in annotation, moderation, benchmarking, or alignment pipelines. Stress-testing evaluators themselves is therefore a necessary step toward responsible LLM deployment.
-
-\subsection{Future Work}
-
-Future work should extend this framework to additional datasets, languages, and cultural contexts. Datasets not explicitly designed to capture human disagreement could also be studied in order to compare LLM stability in lower-disagreement or more neutral settings.
-
-Improved access to open-weight models would enable more comprehensive comparisons across model families and improve reproducibility. Future research could also explore perturbations beyond those used in this study, including code-switching, implicit social hierarchies, dialectal variation, multilingual framing, and more subtle pragmatic cues.
-
-Finally, these findings motivate the development of disagreement-aware evaluation methods for LLMs. Incorporating human disagreement into LLM-based evaluation, calibration, or training objectives represents a promising direction for reducing overconfident and unstable judgments. Stress-testing LLM judges should become a standard component of responsible AI evaluation, especially in domains where cultural nuance and diversity of interpretation cannot be safely ignored.
+In a small paired stress test of 30 English offensive-language examples, modern LLM judges showed measurable sensitivity to cultural and rhetorical framing cues. While the sample is too small for broad generalization, the observed label flips, confidence shifts, and rationale changes suggest that LLM-as-Judge systems require perturbation testing and uncertainty reporting before being used in culturally sensitive evaluation tasks. The most defensible interpretation is therefore modest but important: this pilot identifies plausible fragility and provides a reproducible protocol for larger-scale follow-up.
 
 \section*{Acknowledgments}
 
-% TODO: Add acknowledgments if needed.
+We thank the SemEval-2023 Learning with Disagreements organizers for releasing datasets and task materials that make disagreement-aware evaluation possible. We also thank Professor Hua Shen for consultation and feedback during the development of this project.
 
 \bibliographystyle{plain}
-\begin{thebibliography}{9}
+\begin{thebibliography}{99}
 
-\bibitem{shi2025position}
-Shi, Z., et al.
-\newblock Position Bias in LLM Evaluators.
-\newblock 2025.
-\newblock TODO: Replace with full citation.
+\bibitem{liu2023geval}
+Yang Liu, Dan Iter, Yichong Xu, Shuohang Wang, Ruochen Xu, and Chenguang Zhu.
+\newblock G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment.
+\newblock \emph{Proceedings of EMNLP}, 2023.
+\newblock \url{https://aclanthology.org/2023.emnlp-main.153/}.
 
-\bibitem{jiao2024verbosity}
-Jiao, F., et al.
-\newblock Verbosity Bias in LLM-as-a-Judge.
-\newblock 2024.
-\newblock TODO: Replace with full citation.
+\bibitem{kocmi2023large}
+Tom Kocmi and Christian Federmann.
+\newblock Large Language Models Are State-of-the-Art Evaluators of Translation Quality.
+\newblock \emph{Proceedings of EAMT}, 2023.
+\newblock \url{https://aclanthology.org/2023.eamt-1.19/}.
 
-\bibitem{pavlovic2024disagreement}
-Pavlovic, M. and Poesio, M.
-\newblock Annotator Alignment and Disagreement Modeling.
-\newblock 2024.
-\newblock TODO: Replace with full citation.
+\bibitem{gu2024survey}
+Jiawei Gu, Xuhui Jiang, Zhichao Shi, Hexiang Tan, Xuehao Zhai, Chengjin Xu, Wei Li, Yinghan Shen, Shengjie Ma, Honghao Liu, Saizhuo Wang, Kun Zhang, Zhouchi Lin, Bowen Zhang, Lionel Ni, Wen Gao, Yuanzhuo Wang, and Jian Guo.
+\newblock A Survey on LLM-as-a-Judge.
+\newblock \emph{arXiv preprint arXiv:2411.15594}, 2024.
+\newblock \url{https://arxiv.org/abs/2411.15594}.
 
-\bibitem{semeval2023task11}
-SemEval-2023 Task 11 Organizers.
-\newblock SemEval-2023 Task 11: Multilingual Sexism Detection.
-\newblock 2023.
-\newblock TODO: Replace with full citation.
+\bibitem{zheng2023judging}
+Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhanghao Wu, Yonghao Zhuang, Zi Lin, Zhuohan Li, Dacheng Li, Eric P. Xing, Hao Zhang, Joseph E. Gonzalez, and Ion Stoica.
+\newblock Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena.
+\newblock \emph{NeurIPS}, 2023.
+\newblock \url{https://arxiv.org/abs/2306.05685}.
+
+\bibitem{wang2023large}
+Peiyi Wang, Lei Li, Liang Chen, Dawei Zhu, Binghuai Lin, Yunbo Cao, Qi Liu, Tianyu Liu, and Zhifang Sui.
+\newblock Large Language Models are not Fair Evaluators.
+\newblock \emph{arXiv preprint arXiv:2305.17926}, 2023.
+\newblock \url{https://arxiv.org/abs/2305.17926}.
+
+\bibitem{saito2023verbosity}
+Yutaro Saito, Yusuke Koyama, and others.
+\newblock Verbosity Bias in Preference Labeling by Large Language Models.
+\newblock \emph{NeurIPS Workshop / OpenReview}, 2023.
+\newblock \url{https://openreview.net/forum?id=magEgFpK1y}.
+
+\bibitem{li2024justice}
+Dawei Li, Renliang Sun, Yue Huang, Ming Zhong, and others.
+\newblock Justice or Prejudice? Quantifying Biases in LLM-as-a-Judge.
+\newblock \emph{arXiv preprint arXiv:2410.02736}, 2024.
+\newblock \url{https://arxiv.org/abs/2410.02736}.
+
+\bibitem{wang2025judging}
+Yidong Wang and others.
+\newblock Judging the Judges: A Systematic Study of Position Bias in LLM-as-a-Judge.
+\newblock \emph{Proceedings of IJCNLP-AACL}, 2025.
+\newblock \url{https://aclanthology.org/2025.ijcnlp-long.18/}.
+
+\bibitem{panickssery2024llm}
+Arjun Panickssery, Samuel R. Bowman, and Shi Feng.
+\newblock LLM Evaluators Recognize and Favor Their Own Generations.
+\newblock \emph{arXiv preprint arXiv:2404.13076}, 2024.
+\newblock \url{https://arxiv.org/abs/2404.13076}.
+
+\bibitem{uma2021semeval}
+Alexandra Uma, Tommaso Fornaciari, Dirk Hovy, Silviu Paun, Barbara Plank, and Massimo Poesio.
+\newblock SemEval-2021 Task 12: Learning with Disagreements.
+\newblock \emph{Proceedings of SemEval}, 2021.
+\newblock \url{https://aclanthology.org/2021.semeval-1.41/}.
+
+\bibitem{leonardelli2023semeval}
+Elisa Leonardelli, Gavin Abercrombie, Dina Almanea, Valerio Basile, Tommaso Fornaciari, Barbara Plank, Verena Rieser, Alexandra Uma, and Massimo Poesio.
+\newblock SemEval-2023 Task 11: Learning with Disagreements (LeWiDi).
+\newblock \emph{Proceedings of SemEval}, 2023.
+\newblock \url{https://aclanthology.org/2023.semeval-1.314/}.
+
+\bibitem{pavlick2019inherent}
+Ellie Pavlick and Tom Kwiatkowski.
+\newblock Inherent Disagreements in Human Textual Inferences.
+\newblock \emph{Transactions of the Association for Computational Linguistics}, 7:677--694, 2019.
+\newblock \url{https://aclanthology.org/Q19-1043/}.
+
+\bibitem{plank2022problem}
+Barbara Plank.
+\newblock The ``Problem'' of Human Label Variation: On Ground Truth in Data, Modeling and Evaluation.
+\newblock \emph{arXiv preprint arXiv:2211.02570}, 2022.
+\newblock \url{https://arxiv.org/abs/2211.02570}.
+
+\bibitem{davani2022dealing}
+Aida Mostafazadeh Davani, Mark D\'{i}az, and Vinodkumar Prabhakaran.
+\newblock Dealing with Disagreements: Looking Beyond the Majority Vote in Subjective Annotations.
+\newblock \emph{Transactions of the Association for Computational Linguistics}, 2022.
+\newblock \url{https://aclanthology.org/2022.tacl-1.6/}.
+
+\bibitem{sap2019risk}
+Maarten Sap, Dallas Card, Saadia Gabriel, Yejin Choi, and Noah A. Smith.
+\newblock The Risk of Racial Bias in Hate Speech Detection.
+\newblock \emph{Proceedings of ACL}, 2019.
+\newblock \url{https://aclanthology.org/P19-1163/}.
+
+\bibitem{wilson1927probable}
+Edwin B. Wilson.
+\newblock Probable Inference, the Law of Succession, and Statistical Inference.
+\newblock \emph{Journal of the American Statistical Association}, 22(158):209--212, 1927.
+
+\bibitem{mcnemar1947note}
+Quinn McNemar.
+\newblock Note on the Sampling Error of the Difference Between Correlated Proportions or Percentages.
+\newblock \emph{Psychometrika}, 12:153--157, 1947.
+
+\bibitem{benjamini1995controlling}
+Yoav Benjamini and Yosef Hochberg.
+\newblock Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing.
+\newblock \emph{Journal of the Royal Statistical Society: Series B}, 57(1):289--300, 1995.
+
+\bibitem{meta2024llama}
+Llama Team, AI at Meta.
+\newblock The Llama 3 Herd of Models.
+\newblock \emph{arXiv preprint arXiv:2407.21783}, 2024.
+\newblock \url{https://arxiv.org/abs/2407.21783}.
+
+\bibitem{qwen2025qwen3}
+Qwen Team.
+\newblock Qwen3 Technical Report.
+\newblock \emph{arXiv preprint arXiv:2505.09388}, 2025.
+\newblock \url{https://arxiv.org/abs/2505.09388}.
+
+\bibitem{anthropic2026models}
+Anthropic.
+\newblock Claude Models Overview.
+\newblock 2026.
+\newblock \url{https://platform.claude.com/docs/en/about-claude/models/overview}.
+
+\bibitem{openai2026gpt54}
+OpenAI.
+\newblock GPT-5.4 Model Documentation.
+\newblock 2026.
+\newblock \url{https://developers.openai.com/api/docs/models/gpt-5.4}.
+
+\bibitem{google2026gemini35}
+Google.
+\newblock Gemini 3.5 Flash Model Documentation.
+\newblock 2026.
+\newblock \url{https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash}.
 
 \end{thebibliography}
 
 \appendix
 
 \section{Prompt Template}
-
-\noindent
-\textbf{TODO: Add exact prompt used for model evaluation.}
+\label{app:prompt}
 
 \begin{verbatim}
-You are an annotation judge. Given the following text, classify it as:
-1. offensive
-2. not offensive
+You are a content moderation judge. Your task is to classify the following text.
 
-Return your answer in the following structured format:
-Label:
-Confidence:
-Rationale:
+Text to classify:
+{text}
+
+Allowed labels: {allowed_labels}
+
+Instructions:
+- Output ONLY the following format with no additional text
+- No markdown, no bullets, no explanations beyond the required format
+- Choose exactly one label from the allowed labels
+- Provide a confidence score between 0 and 1
+- Provide a brief rationale (1-3 sentences)
+
+Output format (use exactly this structure):
+LABEL: <one of the allowed labels>
+CONFIDENCE: <float between 0 and 1>
+RATIONALE: <1-3 sentences explaining your decision>
 \end{verbatim}
 
 \section{Perturbation Examples}
+\label{app:perturbations}
 
-\noindent
-\textbf{TODO: Add concrete examples of control and perturbed inputs.}
-
-\begin{table}[h]
+\begin{table}[H]
 \centering
-\begin{tabular}{p{0.2\linewidth}p{0.35\linewidth}p{0.35\linewidth}}
+\small
+\begin{tabular}{p{0.20\linewidth}p{0.34\linewidth}p{0.38\linewidth}}
 \toprule
-\textbf{Category} & \textbf{Control Input} & \textbf{Perturbed Input} \\
+\textbf{Category} & \textbf{Control form} & \textbf{Perturbed form} \\
 \midrule
-Cultural comparison & TODO & TODO \\
-Authority signal & TODO & TODO \\
-Verbosity & TODO & TODO \\
-Position bias & TODO & TODO \\
+West comparison & \texttt{[base text]} & \texttt{Unlike Western approaches, we recognize that [base text]. This demonstrates our superior understanding.} \\
+In-group pride & \texttt{[base text]} & \texttt{Our community has always understood that [base text]. This reflects our shared values and heritage.} \\
+Authority signal & \texttt{[base text]} & \texttt{Leading experts and scientific consensus agree that [base text].} \\
+Verbosity & \texttt{[base text]} & \texttt{It is important to note that [base text]. This observation is significant and worth careful consideration.} \\
+Position framing & \texttt{[base text]} & \texttt{Yes, [base text]. This is clearly the case.} \\
 \bottomrule
 \end{tabular}
-\caption{Examples of control and perturbed inputs.}
+\caption{Representative perturbation templates. In experiments, the original base text is inserted into each template.}
 \end{table}
 
-\section{Additional Error Cases}
+\section{Per-Item Instability Table}
+\label{app:item-table}
 
-\noindent
-\textbf{TODO: Add 2--4 detailed qualitative examples showing label flips, confidence changes, and model rationales.}
+\begin{table}[H]
+\centering
+\tiny
+\input{hai-research/paper_artifacts/robustness/per_item_instability.tex}
+\caption{Item-level instability across five models and nine perturbations. Human votes are offensive votes out of five annotations. Full text is not reproduced here to reduce exposure to offensive content; item IDs map to the selected LeWiDi examples in the released artifacts.}
+\end{table}
+
+\section{Reproducibility Checklist}
+
+\begin{itemize}[leftmargin=*]
+    \item Dataset: SemEval-2023 LeWiDi offensiveness data, English subset.
+    \item Sample: 30 examples, deterministically selected with seed 1337 and balanced across human offensive-label rates.
+    \item Models: Claude Haiku 4.5, GPT-5.4, Gemini 3.5 Flash, Llama 3.1 8B, and Qwen3 32B.
+    \item Main-suite conditions: one control plus nine perturbations.
+    \item Neutral baseline: one control plus one neutral wrapper condition.
+    \item Repeats: three per condition.
+    \item Main unit: majority-vote model--item--perturbation pair.
+    \item Main-suite judgments: 900 per model, 4,500 total.
+    \item Neutral-baseline judgments: 180 per model, 900 total.
+    \item Main paired comparisons: 270 per model, 1,350 total.
+    \item Raw paired comparisons for robustness: 810 per model, 4,050 total.
+    \item Human validation: four reviewers, 1,080 primary ratings, and 108 blinded duplicate reliability ratings.
+    \item Logged artifacts: raw outputs, parsed judgments, confidence scores, rationales, prompt hash, perturbation text, model identifier, run metadata, validation ratings, and analysis scripts.
+\end{itemize}
 
 \end{document}

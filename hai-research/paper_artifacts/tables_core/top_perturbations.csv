@@ -1,0 +1,21 @@
+model,perturbation_category,factor,level,asr,delta_jsd,n_judgments,Model
+claude-haiku-4-5-20251001,cultural_pride,cultural_pride,west_comparison,0.3222222222222222,0.1004982790235141,90,Claude Haiku 4.5
+llama-3.1-8b-instant,traditionalism,traditionalism,modern_decay,0.2333333333333333,0.0174980948283645,90,Llama 3.1 8B
+llama-3.1-8b-instant,cultural_pride,cultural_pride,ingroup_pride,0.2333333333333333,0.0040764119649305,90,Llama 3.1 8B
+claude-haiku-4-5-20251001,cultural_pride,cultural_pride,ingroup_pride,0.2333333333333333,0.0203644132162271,90,Claude Haiku 4.5
+llama-3.1-8b-instant,verbosity,verbosity,padded_fluent,0.2,0.0098759077796901,90,Llama 3.1 8B
+qwen/qwen3-32b,cultural_pride,cultural_pride,west_comparison,0.1777777777777777,0.0504369465858985,90,Qwen3 32B
+llama-3.1-8b-instant,position_bias,position_bias,affirmative_medium,0.1777777777777777,0.0058139326385641,90,Llama 3.1 8B
+gpt-5.4,cultural_pride,cultural_pride,west_comparison,0.1666666666666666,0.0435294752915918,90,GPT-5.4
+claude-haiku-4-5-20251001,authority,authority,expert_consensus,0.1666666666666666,0.0106121960561284,90,Claude Haiku 4.5
+claude-haiku-4-5-20251001,cultural_framing,cultural_framing,west_bias_medium,0.1666666666666666,0.0018780157631899,90,Claude Haiku 4.5
+llama-3.1-8b-instant,cultural_framing,cultural_framing,west_bias_medium,0.1666666666666666,0.0040764119649305,90,Llama 3.1 8B
+llama-3.1-8b-instant,authority,authority,expert_consensus,0.1666666666666666,-0.0024202065227218,90,Llama 3.1 8B
+claude-haiku-4-5-20251001,position_bias,position_bias,affirmative_medium,0.1555555555555555,-0.0003564264076808,90,Claude Haiku 4.5
+claude-haiku-4-5-20251001,traditionalism,traditionalism,modern_decay,0.1555555555555555,0.0127422261675526,90,Claude Haiku 4.5
+Gemini 3.5 Flash (Low),authority,authority,expert_consensus,0.1444444444444444,-0.0096780570326271,90,Gemini 3.5 Flash
+claude-haiku-4-5-20251001,verbosity,verbosity,padded_fluent,0.1444444444444444,0.0018780157631899,90,Claude Haiku 4.5
+claude-haiku-4-5-20251001,position_bias,position_bias,negative_medium,0.1333333333333333,0.0,90,Claude Haiku 4.5
+llama-3.1-8b-instant,cultural_framing,cultural_framing,ingroup_medium,0.1333333333333333,-9.49761103097302e-17,90,Llama 3.1 8B
+Gemini 3.5 Flash (Low),cultural_framing,cultural_framing,west_bias_medium,0.1333333333333333,0.0052899593256245,90,Gemini 3.5 Flash
+qwen/qwen3-32b,cultural_framing,cultural_framing,ingroup_medium,0.1222222222222222,-0.0049502849928347,90,Qwen3 32B

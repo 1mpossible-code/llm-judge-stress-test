@@ -1,0 +1,39 @@
+experiment_name: exp_semeval_cultural
+dataset:
+  path: data/lewidi/offensiveness.jsonl
+  allowed_labels: ["offensive", "not_offensive"]
+  languages: ["en", "ar", "da", "de", "el", "en", "es", "fi", "fr", "hi", "it", "nl", "no", "pl", "pt", "ru", "sv", "tr", "zh"]
+  limit: 100  # Set to number for testing, null for full dataset
+perturbations:
+  factors:
+    - name: control
+      levels: ["original"]
+    - name: cultural_framing
+      levels: ["ingroup_high", "ingroup_medium", "west_bias_high", "west_bias_medium"]
+  seed: 1337
+judging:
+  mode: "classification"
+  prompt_file: "prompts/judge_v1.txt"
+  prompt_version: "judge_v1"
+  repeats: 3
+  temperature: 0.0
+  max_tokens: 64
+  models:
+    - name: "claude-haiku-4-5-20251001"
+      backend: "anthropic"
+      params: {}
+    # - name: "gpt-4o-mini"
+    #   backend: "openai"
+    #   params: {}
+metrics:
+  bootstrap_samples: 200
+  confidence_level: 0.95
+output:
+  runs_dir: "runs"
+  save_figures: true
+  figure_format: "png"
+cache:
+  enabled: true
+  max_retries: 5
+  backoff_base_seconds: 1.0
+

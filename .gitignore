@@ -1,0 +1,59 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Nested/project environments
+hai-research/.venv/
+hai-research/.pytest_cache/
+hai-research/.git/
+
+# Experiment runs are large; use paper_artifacts/ for publishable summaries
+hai-research/runs/
+
+# Full/raw dataset dumps; keep only the selected paper sample and metadata
+hai-research/data/lewidi/*
+!hai-research/data/lewidi/paper_sample_30_balanced.jsonl
+!hai-research/data/lewidi/paper_sample_30_balanced_meta.json
+!hai-research/data/lewidi/offensiveness_meta.json
+
+# Human-review raw files may contain reviewer identifiers and offensive text
+hai-research/human_validation/*.jsonl
+hai-research/paper_artifacts/human_validation/semantic_validation_raw_merged.jsonl
+
+# Generated helper package for reviewers
+human_validation_package/
+human_validation_package.zip
+
+# LaTeX/Tectonic intermediates
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# OS/editor
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

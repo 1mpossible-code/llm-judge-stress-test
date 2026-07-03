@@ -1,0 +1,23 @@
+{"id": "toy_001", "language": "en", "text": "This is a completely harmless statement.", "human_labels": ["not_offensive", "not_offensive", "not_offensive", "not_offensive", "not_offensive"]}
+{"id": "toy_002", "language": "en", "text": "I think that was inappropriate.", "human_labels": ["not_offensive", "not_offensive", "offensive", "not_offensive"]}
+{"id": "toy_003", "language": "en", "text": "That's actually quite rude.", "human_labels": ["offensive", "not_offensive", "offensive", "not_offensive", "offensive"]}
+{"id": "toy_004", "language": "en", "text": "What a terrible thing to say.", "human_labels": ["offensive", "offensive", "not_offensive", "offensive"]}
+{"id": "toy_005", "language": "en", "text": "This comment seems fine to me.", "human_labels": ["not_offensive", "not_offensive", "not_offensive"]}
+{"id": "toy_006", "language": "en", "text": "That language is unacceptable.", "human_labels": ["offensive", "offensive", "offensive", "offensive", "offensive"]}
+{"id": "toy_007", "language": "en", "text": "I'm not sure how to interpret this.", "human_labels": ["not_offensive", "not_offensive", "not_offensive", "offensive"]}
+{"id": "toy_008", "language": "en", "text": "This might be problematic.", "human_labels": ["offensive", "not_offensive", "offensive", "not_offensive", "offensive"]}
+{"id": "toy_009", "language": "en", "text": "Nothing wrong with this at all.", "human_labels": ["not_offensive", "not_offensive", "not_offensive", "not_offensive"]}
+{"id": "toy_010", "language": "en", "text": "That crosses a line.", "human_labels": ["offensive", "offensive", "offensive", "not_offensive"]}
+{"id": "toy_011", "language": "en", "text": "A neutral observation here.", "human_labels": ["not_offensive", "not_offensive", "not_offensive", "not_offensive", "not_offensive"]}
+{"id": "toy_012", "language": "en", "text": "This seems disrespectful.", "human_labels": ["offensive", "not_offensive", "offensive", "not_offensive", "not_offensive"]}
+{"id": "toy_013", "language": "en", "text": "Perfectly acceptable statement.", "human_labels": ["not_offensive", "not_offensive", "not_offensive"]}
+{"id": "toy_014", "language": "en", "text": "I find this offensive.", "human_labels": ["offensive", "offensive", "offensive", "offensive", "not_offensive"]}
+{"id": "toy_015", "language": "en", "text": "This is borderline but probably okay.", "human_labels": ["not_offensive", "offensive", "not_offensive", "offensive", "not_offensive"]}
+{"id": "toy_016", "language": "en", "text": "Clearly inappropriate behavior.", "human_labels": ["offensive", "offensive", "offensive", "offensive", "offensive"]}
+{"id": "toy_017", "language": "en", "text": "Standard conversational comment.", "human_labels": ["not_offensive", "not_offensive", "not_offensive", "not_offensive"]}
+{"id": "toy_018", "language": "en", "text": "That's really not okay.", "human_labels": ["offensive", "offensive", "not_offensive", "offensive"]}
+{"id": "toy_019", "language": "en", "text": "Seems like a reasonable point.", "human_labels": ["not_offensive", "not_offensive", "not_offensive", "not_offensive", "not_offensive"]}
+{"id": "toy_020", "language": "en", "text": "This comment is concerning.", "human_labels": ["offensive", "not_offensive", "offensive", "offensive", "not_offensive"]}
+{"id": "toy_021", "language": "en", "text": "A typical everyday remark.", "human_labels": ["not_offensive", "not_offensive", "not_offensive"]}
+{"id": "toy_022", "language": "en", "text": "That violates basic decency.", "human_labels": ["offensive", "offensive", "offensive", "offensive"]}
+

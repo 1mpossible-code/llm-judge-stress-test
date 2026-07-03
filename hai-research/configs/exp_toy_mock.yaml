@@ -1,0 +1,42 @@
+experiment_name: exp_toy_mock
+dataset:
+  path: data/toy/base.jsonl
+  allowed_labels: ["offensive", "not_offensive"]
+  languages: ["en"]
+  limit: null  # Set to number for testing, null for full dataset
+perturbations:
+  factors:
+    - name: control
+      levels: ["original"]
+    - name: authority
+      levels: ["religious_command", "expert_consensus"]
+    - name: cultural_pride
+      levels: ["ingroup_pride", "west_comparison"]
+    - name: traditionalism
+      levels: ["modern_decay"]
+    - name: verbosity
+      levels: ["padded_fluent"]
+  seed: 1337
+judging:
+  mode: "classification"
+  prompt_file: "prompts/judge_v1.txt"
+  prompt_version: "judge_v1"
+  repeats: 3
+  temperature: 0.0
+  max_tokens: 250
+  models:
+    - name: "mock-model-v1"
+      backend: "mock"
+      params: {}
+metrics:
+  bootstrap_samples: 200
+  confidence_level: 0.95
+output:
+  runs_dir: "runs"
+  save_figures: true
+  figure_format: "png"
+cache:
+  enabled: true
+  max_retries: 5
+  backoff_base_seconds: 1.0
+

@@ -1,0 +1,47 @@
+experiment_name: exp_pilot_gemini_cli
+
+dataset:
+  path: data/lewidi/offensiveness.jsonl
+  allowed_labels: ["offensive", "not_offensive"]
+  languages: ["en"]
+  limit: 3
+
+perturbations:
+  factors:
+    - name: control
+      levels: ["original"]
+    - name: cultural_pride
+      levels: ["west_comparison"]
+    - name: authority
+      levels: ["expert_consensus"]
+    - name: verbosity
+      levels: ["padded_fluent"]
+  seed: 1337
+
+judging:
+  mode: "classification"
+  prompt_file: "prompts/judge_v1.txt"
+  prompt_version: "judge_v1"
+  repeats: 1
+  temperature: 0.0
+  max_tokens: 64
+  max_workers: 1
+  models:
+    - name: "gemini-2.5-flash"
+      backend: "gemini_cli"
+      params:
+        timeout_seconds: 120
+
+metrics:
+  bootstrap_samples: 50
+  confidence_level: 0.95
+
+output:
+  runs_dir: "runs"
+  save_figures: true
+  figure_format: "png"
+
+cache:
+  enabled: true
+  max_retries: 5
+  backoff_base_seconds: 1.0

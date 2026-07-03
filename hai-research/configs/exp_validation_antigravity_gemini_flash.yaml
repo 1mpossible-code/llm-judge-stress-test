@@ -1,0 +1,49 @@
+experiment_name: exp_validation_antigravity_gemini_flash
+
+dataset:
+  path: data/lewidi/paper_sample_30_balanced.jsonl
+  allowed_labels: ["offensive", "not_offensive"]
+  languages: ["en"]
+  limit: null
+
+perturbations:
+  factors:
+    - name: control
+      levels: ["original"]
+    - name: cultural_pride
+      levels: ["west_comparison", "ingroup_pride"]
+    - name: authority
+      levels: ["expert_consensus"]
+    - name: verbosity
+      levels: ["padded_fluent"]
+    - name: position_bias
+      levels: ["negative_medium"]
+  seed: 1337
+
+judging:
+  mode: "classification"
+  prompt_file: "prompts/judge_v1.txt"
+  prompt_version: "judge_v1"
+  repeats: 1
+  temperature: 0.0
+  max_tokens: 64
+  max_workers: 1
+  models:
+    - name: "Gemini 3.5 Flash (Low)"
+      backend: "antigravity"
+      params:
+        timeout: "120s"
+
+metrics:
+  bootstrap_samples: 100
+  confidence_level: 0.95
+
+output:
+  runs_dir: "runs"
+  save_figures: true
+  figure_format: "png"
+
+cache:
+  enabled: true
+  max_retries: 5
+  backoff_base_seconds: 1.0

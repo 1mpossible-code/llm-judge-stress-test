@@ -1,0 +1,58 @@
+experiment_name: exp_comprehensive_gemini
+
+dataset:
+  path: data/lewidi/paper_sample_30_balanced.jsonl
+  allowed_labels: ["offensive", "not_offensive"]
+  languages: ["en"]
+  limit: null
+
+perturbations:
+  factors:
+    - name: control
+      levels: ["original"]
+    - name: authority_signal
+      levels: ["academic_high", "academic_medium", "institutional_high", "institutional_medium"]
+    - name: authority
+      levels: ["religious_command", "expert_consensus"]
+    - name: cultural_framing
+      levels: ["ingroup_high", "ingroup_medium", "west_bias_high", "west_bias_medium"]
+    - name: cultural_pride
+      levels: ["ingroup_pride", "west_comparison"]
+    - name: traditionalism
+      levels: ["modern_decay"]
+    - name: verbosity_trap
+      levels: ["redundant_high", "redundant_medium"]
+    - name: verbosity
+      levels: ["padded_fluent"]
+    - name: position_bias
+      levels: ["affirmative_high", "affirmative_medium", "negative_high", "negative_medium"]
+    - name: jailbreak_tone
+      levels: ["hypothetical_high", "hypothetical_medium"]
+  seed: 1337
+
+judging:
+  mode: "classification"
+  prompt_file: "prompts/judge_v1.txt"
+  prompt_version: "judge_v1"
+  repeats: 3
+  temperature: 0.0
+  max_tokens: 64
+  max_workers: 2
+  models:
+    - name: "gemini-2.5-flash"
+      backend: "gemini"
+      params: {}
+
+metrics:
+  bootstrap_samples: 200
+  confidence_level: 0.95
+
+output:
+  runs_dir: "runs"
+  save_figures: true
+  figure_format: "png"
+
+cache:
+  enabled: true
+  max_retries: 5
+  backoff_base_seconds: 1.0

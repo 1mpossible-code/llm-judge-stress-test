@@ -1,0 +1,32 @@
+{
+  "ingestion_stats": {
+    "total_examples": 7696,
+    "skipped": 0,
+    "by_split": {
+      "train": 6592,
+      "dev": 1104
+    }
+  },
+  "label_mapping": {
+    "0": "not_offensive",
+    "1": "offensive",
+    "OFF": "offensive",
+    "NOT_OFF": "not_offensive",
+    "offensive": "offensive",
+    "not_offensive": "not_offensive",
+    "hateful": "offensive",
+    "normal": "not_offensive",
+    "abusive": "offensive",
+    "neutral": "not_offensive"
+  },
+  "raw_labels_seen": [
+    "0",
+    "1"
+  ],
+  "normalized_labels_seen": [
+    "not_offensive",
+    "offensive"
+  ],
+  "task": "offensiveness",
+  "dataset": "lewidi"
+}

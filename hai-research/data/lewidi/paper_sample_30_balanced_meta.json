@@ -1,0 +1,53 @@
+{
+  "input_path": "data/lewidi/offensiveness.jsonl",
+  "out_path": "data/lewidi/paper_sample_30_balanced.jsonl",
+  "n_requested": 30,
+  "n_selected": 30,
+  "language": "en",
+  "seed": 1337,
+  "allowed_labels": [
+    "offensive",
+    "not_offensive"
+  ],
+  "positive_label": "offensive",
+  "bucket_counts": {
+    "offensive_rate_0.0": 5,
+    "offensive_rate_0.2": 5,
+    "offensive_rate_0.4": 5,
+    "offensive_rate_0.6": 5,
+    "offensive_rate_0.8": 5,
+    "offensive_rate_1.0": 5
+  },
+  "selected_ids": [
+    "00cb55a378305d5d",
+    "08795d79f8e92fd9",
+    "08c7855b5b7e2097",
+    "12ef1692ee8e4598",
+    "12f8e82499326cb4",
+    "2c377650efbf42fc",
+    "2d3c5e0ab22d3867",
+    "33b557e5a77047a8",
+    "34e59241745cdef7",
+    "36edfd674ade32e8",
+    "384332d874784dc4",
+    "463a02fae8161e65",
+    "499e640f24c07582",
+    "58e34cb0a3eb8649",
+    "6399c2fe306ffd9e",
+    "6688b535108f0eeb",
+    "6ec14592fb5304ab",
+    "6fae5aa16c78797e",
+    "734d9374a7cea4e2",
+    "80730b3867b922e2",
+    "a1f214b7b4d7fb68",
+    "b4d0869b089dfc5c",
+    "bea1973108b3e491",
+    "cb4d3d57bd485272",
+    "d1410dad8663dbcf",
+    "d3153893b6f2dd9c",
+    "d8d4d6260a7e1fa5",
+    "d94eb9a72140bbc6",
+    "e1c54380cdedbff6",
+    "e457ee99cd63694b"
+  ]
+}
